@@ -267,6 +267,38 @@ public:
 	/** Show debug HUD overlay with scanner status */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|HUD")
 	bool bShowDebugHUD;
+	
+	// ========================================================================
+	// DEBUG VISUALIZATION
+	// ========================================================================
+	
+	/** Show scan point spheres in 3D world */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
+	bool bShowScanPointSpheres;
+	
+	/** Show lines from camera to hit points */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
+	bool bShowScanLines;
+	
+	/** Show the orbit path as a circle */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
+	bool bShowOrbitPath;
+	
+	/** Size of scan point spheres (in cm) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization", meta = (ClampMin = "5.0", ClampMax = "100.0"))
+	float ScanPointSphereSize;
+	
+	/** How long to keep debug visuals visible (in seconds) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization", meta = (ClampMin = "1.0", ClampMax = "300.0"))
+	float DebugVisualsLifetime;
+	
+	/** Color for scan point spheres */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
+	FColor ScanPointColor;
+	
+	/** Color for scan lines */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
+	FColor ScanLineColor;
 
 	// ========================================================================
 	// PUBLIC GETTER FUNCTIONS (For HUD Access)
@@ -558,4 +590,7 @@ private:
 	
 	// Text-to-Speech
 	void SpeakText(const FString& TextToSpeak);
+	
+	// Debug Visualization
+	void DrawOrbitPath();
 };

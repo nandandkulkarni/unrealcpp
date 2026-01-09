@@ -88,6 +88,39 @@ void ANKScannerCameraActor::RecordCurrentScanPoint()
 		DataPoint.LaserHitNormal = HitResult.Normal;
 		DataPoint.HitDistance = HitResult.Distance;
 		DataPoint.HitActorName = HitResult.GetActor() ? HitResult.GetActor()->GetName() : TEXT("None");
+		
+		// ===== VISUAL DEBUG: Draw spheres and lines at scan points =====
+		if (GetWorld())
+		{
+			// Draw sphere at hit location
+			if (bShowScanPointSpheres)
+			{
+				DrawDebugSphere(
+					GetWorld(),
+					HitResult.Location,
+					ScanPointSphereSize,
+					8,
+					ScanPointColor,
+					true,  // Persistent
+					DebugVisualsLifetime
+				);
+			}
+			
+			// Draw line from camera to hit point
+			if (bShowScanLines)
+			{
+				DrawDebugLine(
+					GetWorld(),
+					GetActorLocation(),
+					HitResult.Location,
+					ScanLineColor,
+					true,  // Persistent
+					DebugVisualsLifetime,
+					0,
+					1.0f
+				);
+			}
+		}
 	}
 	else
 	{

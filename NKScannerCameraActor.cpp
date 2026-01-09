@@ -70,6 +70,15 @@ ANKScannerCameraActor::ANKScannerCameraActor(const FObjectInitializer& ObjectIni
 	
 	// Initialize HUD settings
 	bShowDebugHUD = true;  // Show HUD by default
+	
+	// Initialize debug visualization settings
+	bShowScanPointSpheres = true;   // Show spheres at scan points
+	bShowScanLines = true;           // Show lines from camera to points
+	bShowOrbitPath = true;           // Show orbit circle
+	ScanPointSphereSize = 15.0f;     // 15cm spheres
+	DebugVisualsLifetime = 60.0f;    // Keep visible for 60 seconds
+	ScanPointColor = FColor::Cyan;   // Cyan spheres
+	ScanLineColor = FColor::Yellow;  // Yellow lines
 
 	// Initialize internal state
 	bIsCinematicScanActive = false;
@@ -612,6 +621,12 @@ void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float He
 	
 	// Enter target finder state - Tick() will handle incremental search
 	StartTargetFinderState();
+	
+	// Draw the orbit path for visualization
+	if (bShowOrbitPath && GetWorld())
+	{
+		DrawOrbitPath();
+	}
 	
 	// The UpdateTargetFinder() in Tick() will handle the incremental discovery!
 	// Once target is found, it will automatically transition to Step 4
