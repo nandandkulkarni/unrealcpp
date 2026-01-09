@@ -630,3 +630,20 @@ void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float He
 		SearchDistance / 100.0f, ValidationAngularStepDegrees), true);
 	LogMessage(TEXT("STEP 3: If no hit found, will move outward by 100m and retry"), true);
 	LogMessage(TEXT("STEP 3: Camera orbits HORIZONTALLY, laser shoots PARALLEL to ground"), true);
+	
+	// Enter target finder state - Tick() will handle incremental search
+	StartTargetFinderState();
+	
+	// Draw the orbit path for visualization
+	if (bShowOrbitPath && GetWorld())
+	{
+		DrawOrbitPath();
+	}
+	
+	// The UpdateTargetFinder() in Tick() will handle the spiral search!
+	// Once target is found, it will automatically transition to Step 4
+}
+
+// ========================================================================
+// JSON FUNCTIONS
+// ========================================================================
