@@ -1,91 +1,13 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 // ========================================================================
-// TERRAIN MAPPING - Step 4: Full 360° Orbit Scan & Data Recording
+// CINEMATIC SCANNING & TERRAIN MAPPING
 // ========================================================================
 
 #include "NKScannerCameraActor.h"
-#include "CineCameraComponent.h"
-#include "Misc/Paths.h"
-
-void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float HeightPercent, float DistanceMeters, FString OutputJSONPath)
-{
-	LogMessage(TEXT("=== TERRAIN MAPPING: 4-STEP WORKFLOW ==="), true);
-	
-	// ===== STEP 1: Validate Target (Mandatory) =====
-	LogMessage(TEXT("STEP 1: Validating target..."), true);
-	
-	if (!TargetLandscape)
-	{
-		LogMessage(TEXT("STEP 1 FAILED: Target is NULL - terrain mapping aborted!"), true);
-		return;
-	}
-	
-	LogMessage(FString::Printf(TEXT("STEP 1 SUCCESS: Target validated - %s"), 
-		*TargetLandscape->GetName()), true);
-	
-	CinematicTargetLandscape = TargetLandscape;
-	CinematicHeightPercent = HeightPercent;
-	CinematicDistanceMeters = DistanceMeters;
-	CinematicJSONOutputPath = OutputJSONPath.IsEmpty() ? 
-		FPaths::ProjectSavedDir() / TEXT("ScanData") / TEXT("CinematicScan.json") : OutputJSONPath;
-	
-	// ===== STEP 2: Move to Optimal Mapping Position =====
-	LogMessage(TEXT("STEP 2: Calculating optimal mapping position..."), true);
-	
-	FBox TargetBounds = TargetLandscape->GetComponentsBoundingBox(true);
-	FVector TargetCenter = TargetBounds.GetCenter();
-	FVector BoundsExtent = TargetBounds.GetExtent();
-	float TargetSize = TargetBounds.GetSize().Size();
-	
-	LogMessage(FString::Printf(TEXT("STEP 2: Target bounds - Center: %s, Extent: %s, Size: %.2f"), 
-		*TargetCenter.ToString(), *BoundsExtent.ToString(), TargetSize), true);
-	
-	// Calculate optimal distance (1.5x target size for better coverage)
-	float OptimalDistance = FMath::Max(TargetSize * 1.5f, DistanceMeters * 100.0f);
-	float MappingHeight = TargetBounds.Min.Z + 
-		((TargetBounds.Max.Z - TargetBounds.Min.Z) * (HeightPercent / 100.0f));
-	
-	// Position camera at optimal distance (start at East)
-	FVector MappingPosition = TargetCenter;
-	MappingPosition.X += OptimalDistance;
-	MappingPosition.Z = MappingHeight;
-	
-	SetActorLocation(MappingPosition);
-	
-	LogMessage(FString::Printf(TEXT("STEP 2 SUCCESS: Moved to mapping position at %.2f cm from target (height: %.2f cm)"), 
-		OptimalDistance, MappingHeight), true);
-	
-	// Adjust laser range to ensure target is reachable
-	float DistanceToTarget = FVector::Dist(MappingPosition, TargetCenter);
-	if (DistanceToTarget > LaserMaxRange)
-	{
-		LaserMaxRange = DistanceToTarget * 2.0f;
-		LogMessage(FString::Printf(TEXT("STEP 2: Auto-adjusted laser range to %.2f cm to reach target"), 
-			LaserMaxRange), true);
-	}
-	
-	// Setup orbit parameters for validation scan
-	CinematicOrbitCenter = TargetCenter;
-	CinematicOrbitRadius = OptimalDistance;
-	CinematicOrbitHeight = MappingHeight;
-	CinematicLookAtTarget = TargetCenter;
-	
-	// ===== STEP 3: Enter Validation State (Incremental Discovery) =====
-	LogMessage(TEXT("STEP 3: Entering validation state for incremental target discovery..."), true);
-	LogMessage(FString::Printf(TEXT("STEP 3: Will search using %.2f° steps (~%.0f attempts max)"),
-		ValidationAngularStepDegrees, 360.0f / ValidationAngularStepDegrees), true);
-	LogMessage(TEXT("STEP 3: Green lasers will be visible during discovery - watch for RED laser hit!"), true);
-	
-	// Enter validation state - Tick() will handle incremental search
-	StartValidationState();
-	
-	// The UpdateValidation() in Tick() will handle the incremental discovery!
-	// Once target is found, it will automatically transition to Step 4
-}
 
 void ANKScannerCameraActor::StopCinematicScan()
 {
-	LogMessage(FString::Printf(TEXT("StopCinematicScan: Stopping scan at angle %.2f° with %d data points recorded"),
+	LogMessage(FString::Printf(TEXT("StopCinematicScan: Stopping scan at angle %.2fÂ° with %d data points recorded"),
 		CurrentOrbitAngle, RecordedScanData.Num()), true);
 	
 	// Stop the scan
@@ -104,7 +26,7 @@ void ANKScannerCameraActor::StopCinematicScan()
 		}
 		else
 		{
-			LogMessage(TEXT("StopCinematicScan: ERROR - Failed to save JSON data!"), true);
+		 LogMessage(TEXT("StopCinematicScan: ERROR - Failed to save JSON data!"), true);
 		}
 	}
 	else
@@ -136,10 +58,10 @@ void ANKScannerCameraActor::UpdateCinematicScan(float DeltaTime)
 	// Increment angle for next step
 	CurrentOrbitAngle += CinematicAngularStepDegrees;
 	
-	// Check if we've completed full 360° rotation
+	// Check if we've completed full 360Â° rotation
 	if (CurrentOrbitAngle >= (FirstHitAngle + 360.0f))
 	{
-		LogMessage(TEXT("UpdateCinematicScan: Full 360° orbit complete!"), true);
+		LogMessage(TEXT("UpdateCinematicScan: Full 360Â° orbit complete!"), true);
 		LogMessage(FString::Printf(TEXT("UpdateCinematicScan: Recorded %d data points over %.2f seconds"),
 			RecordedScanData.Num(), CinematicScanElapsedTime), true);
 		
@@ -184,7 +106,7 @@ void ANKScannerCameraActor::RecordCurrentScanPoint()
 	
 	if (bLogEveryFrame)
 	{
-		LogMessage(FString::Printf(TEXT("RecordCurrentScanPoint: Frame %d at angle %.2f° - Hit: %s"),
+		LogMessage(FString::Printf(TEXT("RecordCurrentScanPoint: Frame %d at angle %.2fÂ° - Hit: %s"),
 			DataPoint.FrameNumber, CurrentOrbitAngle, bHit ? TEXT("YES") : TEXT("NO")));
 	}
 }

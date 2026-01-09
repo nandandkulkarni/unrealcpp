@@ -261,6 +261,40 @@ public:
 	bool bLoopPlayback;
 
 	// ========================================================================
+	// HUD SETTINGS
+	// ========================================================================
+	
+	/** Show debug HUD overlay with scanner status */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|HUD")
+	bool bShowDebugHUD;
+
+	// ========================================================================
+	// PUBLIC GETTER FUNCTIONS (For HUD Access)
+	// ========================================================================
+	
+	// Scanner state getters
+	EScannerState GetScannerState() const { return ScannerState; }
+	bool IsScannerEnabled() const { return bScannerEnabled; }
+	
+	// Validation getters
+	bool IsValidating() const { return bIsValidating; }
+	int32 GetValidationAttempts() const { return ValidationAttempts; }
+	float GetCurrentValidationAngle() const { return CurrentValidationAngle; }
+	
+	// Laser getters
+	bool GetLastShotHit() const { return bLastShotHit; }
+	float GetLaserMaxRange() const { return LaserMaxRange; }
+	
+	// Audio getters
+	bool IsAudioEnabled() const { return bEnableAudioFeedback; }
+	
+	// Scan data getters
+	bool IsCinematicScanActive() const { return bIsCinematicScanActive; }
+	float GetCurrentOrbitAngle() const { return CurrentOrbitAngle; }
+	int32 GetRecordedDataCount() const { return RecordedScanData.Num(); }
+	float GetCinematicScanElapsedTime() const { return CinematicScanElapsedTime; }
+
+	// ========================================================================
 	// EVENTS
 	// ========================================================================
 	
@@ -501,11 +535,11 @@ private:
 	FVector CalculateOrbitPosition(float Angle);
 	FRotator CalculateLookAtRotation(const FVector& CameraPosition);
 	
-	// Validation state machine
-	void UpdateValidation(float DeltaTime);
-	void StartValidationState();
-	void OnValidationSuccess();
-	void OnValidationFailure();
+	// Target Finder state machine
+	void UpdateTargetFinder(float DeltaTime);
+	void StartTargetFinderState();
+	void OnTargetFinderSuccess();
+	void OnTargetFinderFailure();
 
 	// JSON operations
 	bool SaveScanDataToJSON(const FString& FilePath);
