@@ -1,8 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "TPCPPGameMode.h"
+#include "NKScannerHUD.h"
 
 ATPCPPGameMode::ATPCPPGameMode()
 {
-	// stub
+	// Set the HUD class to display scanner information
+	HUDClass = ANKScannerHUD::StaticClass();
 }
