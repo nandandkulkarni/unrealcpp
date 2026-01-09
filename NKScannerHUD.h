@@ -9,6 +9,36 @@
 class ANKScannerCameraActor;
 
 /**
+ * Simple button structure for HUD buttons
+ */
+USTRUCT()
+struct FHUDButton
+{
+	GENERATED_BODY()
+
+	FString ButtonText;
+	FVector2D Position;
+	FVector2D Size;
+	FLinearColor NormalColor;
+	FLinearColor HoverColor;
+	FLinearColor PressedColor;
+	bool bIsHovered;
+	bool bIsPressed;
+
+	FHUDButton()
+		: ButtonText(TEXT("Button"))
+		, Position(FVector2D::ZeroVector)
+		, Size(FVector2D(150.0f, 40.0f))
+		, NormalColor(FLinearColor(0.2f, 0.2f, 0.2f, 0.8f))
+		, HoverColor(FLinearColor(0.3f, 0.3f, 0.3f, 0.9f))
+		, PressedColor(FLinearColor(0.4f, 0.4f, 0.4f, 1.0f))
+		, bIsHovered(false)
+		, bIsPressed(false)
+	{
+	}
+};
+
+/**
  * HUD class that displays detailed scanner status information
  * Shows real-time data in the top-left corner of the screen
  */
@@ -22,6 +52,10 @@ public:
 
 	// Override DrawHUD to render scanner status
 	virtual void DrawHUD() override;
+
+	// Handle mouse input for buttons
+	virtual void NotifyHitBoxClick(FName BoxName) override;
+	virtual void NotifyHitBoxRelease(FName BoxName) override;
 
 protected:
 	// Called when the game starts
@@ -45,6 +79,9 @@ private:
 	UPROPERTY(EditAnywhere, Category = "HUD Settings")
 	float FontScale;
 	
+	// Button for starting discovery
+	FHUDButton StartDiscoveryButton;
+	
 	// Camera rotation history (last 10 rotations)
 	TArray<FRotator> RotationHistory;
 	int32 MaxRotationHistory;
@@ -63,6 +100,10 @@ private:
 	void DrawStatusLine(const FString& Text, float& YPos, FLinearColor Color = FLinearColor::White);
 	void DrawSectionHeader(const FString& Text, float& YPos);
 	FLinearColor GetStateColor(const FString& State);
+	
+	// Button drawing and interaction
+	void DrawButton(FHUDButton& Button);
+	bool IsPointInButton(const FHUDButton& Button, const FVector2D& Point) const;
 	
 	// Find scanner camera in the level
 	void FindScannerCamera();

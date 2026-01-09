@@ -5,6 +5,7 @@
 #include "Engine/Canvas.h"
 #include "Engine/Font.h"
 #include "EngineUtils.h"
+#include "DrawDebugHelpers.h"
 
 ANKScannerHUD::ANKScannerHUD()
 {
@@ -26,6 +27,14 @@ ANKScannerHUD::ANKScannerHUD()
 	// Performance settings
 	FramesSinceLastHUDUpdate = 0;
 	HUDUpdateFrequency = 1;  // 1 = every frame (no skipping), 2 = every other frame, 3 = every 3rd frame
+	
+	// Initialize Start Discovery button
+	StartDiscoveryButton.ButtonText = TEXT("Start Discovery");
+	StartDiscoveryButton.Size = FVector2D(180.0f, 50.0f);
+	StartDiscoveryButton.NormalColor = FLinearColor(0.1f, 0.3f, 0.5f, 0.8f);  // Blue-ish
+	StartDiscoveryButton.HoverColor = FLinearColor(0.2f, 0.4f, 0.6f, 0.9f);
+	StartDiscoveryButton.PressedColor = FLinearColor(0.3f, 0.5f, 0.7f, 1.0f);
+	// Position will be set in DrawHUD based on canvas size
 }
 
 void ANKScannerHUD::BeginPlay()
@@ -52,6 +61,18 @@ void ANKScannerHUD::DrawHUD()
 	if (!ScannerCamera->bShowDebugHUD)
 	{
 		return;
+	}
+	
+	// ===== DRAW START DISCOVERY BUTTON (TOP-RIGHT) =====
+	if (Canvas)
+	{
+		// Position button in top-right corner (with padding)
+		float ButtonPadding = 20.0f;
+		StartDiscoveryButton.Position = FVector2D(
+			Canvas->SizeX - StartDiscoveryButton.Size.X - ButtonPadding,
+			ButtonPadding
+		);
+		DrawButton(StartDiscoveryButton);
 	}
 
 	float YPos = HUDYPosition;
@@ -115,47 +136,22 @@ void ANKScannerHUD::DrawHUD()
 
 	// ===== LASER INFO =====
 	DrawSectionHeader(TEXT("LASER:"), YPos);
-	
-	// Show discovery hit (first hit found during validation)
-	if (ScannerCamera->GetScannerState() == EScannerState::Mapping || 
-	    ScannerCamera->GetScannerState() == EScannerState::Complete)
-	{
-		DrawSectionHeader(TEXT("  Discovery Hit (First):"), YPos);
-		FHitResult DiscoveryHit = ScannerCamera->GetFirstHitResult();
-		if (DiscoveryHit.bBlockingHit)
-		{
-			FString HitActorName = DiscoveryHit.GetActor() ? 
-				DiscoveryHit.GetActor()->GetName() : TEXT("Unknown");
-			
-			DrawStatusLine(FString::Printf(TEXT("    Actor: %s"), *HitActorName), YPos, FLinearColor::Green);
-			DrawStatusLine(FString::Printf(TEXT("    Angle: %.1f°"), ScannerCamera->GetFirstHitAngle()), YPos);
-			
-			FVector HitLoc = DiscoveryHit.Location;
-			DrawStatusLine(FString::Printf(TEXT("    Loc: X=%.0f Y=%.0f Z=%.0f"), 
-				HitLoc.X, HitLoc.Y, HitLoc.Z), YPos);
-			DrawStatusLine(FString::Printf(TEXT("    Dist: %.0f cm"), DiscoveryHit.Distance), YPos);
-		}
-	}
-	
-	// Show current orbital hit (most recent hit during mapping)
-	DrawSectionHeader(TEXT("  Current Orbital Hit:"), YPos);
 	if (ScannerCamera->GetLastShotHit())
 	{
 		FString HitActorName = ScannerCamera->GetLastHitActor() ? 
 			ScannerCamera->GetLastHitActor()->GetName() : TEXT("Unknown");
 		
-		DrawStatusLine(FString::Printf(TEXT("    Actor: %s"), *HitActorName), YPos, FLinearColor::Cyan);
+		DrawStatusLine(FString::Printf(TEXT("Hit: %s (%.0f cm)"), 
+			*HitActorName, ScannerCamera->GetLastHitDistance()), YPos, FLinearColor::Green);
 		
 		FVector HitLoc = ScannerCamera->GetLastHitLocation();
-		DrawStatusLine(FString::Printf(TEXT("    Loc: X=%.0f Y=%.0f Z=%.0f"), 
+		DrawStatusLine(FString::Printf(TEXT("Loc: X=%.0f Y=%.0f Z=%.0f"), 
 			HitLoc.X, HitLoc.Y, HitLoc.Z), YPos);
-		DrawStatusLine(FString::Printf(TEXT("    Dist: %.0f cm"), ScannerCamera->GetLastHitDistance()), YPos);
 	}
 	else
 	{
-		DrawStatusLine(TEXT("    No hit"), YPos, FLinearColor::Red);
+		DrawStatusLine(TEXT("Hit: NONE"), YPos, FLinearColor::Red);
 	}
-	
 	DrawStatusLine(FString::Printf(TEXT("Range: %.0f cm"), 
 		ScannerCamera->GetLaserMaxRange()), YPos);
 
@@ -219,7 +215,7 @@ void ANKScannerHUD::DrawHUD()
 		DrawSectionHeader(TEXT("SCAN DATA:"), YPos);
 		DrawStatusLine(FString::Printf(TEXT("Orbit: %.1f° | Points: %d"), 
 			ScannerCamera->GetCurrentOrbitAngle(),
-			ScannerCamera->GetRecordedDataCount()), YPos, FLinearColor(0.0f, 1.0f, 1.0f));  // Cyan color (R=0, G=1, B=1)
+			ScannerCamera->GetRecordedDataCount()), YPos, FLinearColor(0.0f, 1.0f, 1.0f));  // Cyan color
 		DrawStatusLine(FString::Printf(TEXT("Time: %.1fs"), 
 			ScannerCamera->GetCinematicScanElapsedTime()), YPos);
 		
@@ -384,4 +380,64 @@ void ANKScannerHUD::UpdateRotationHistory(const FRotator& CurrentRotation, float
 			}
 		}
 	}
+}
+
+void ANKScannerHUD::DrawButton(FHUDButton& Button)
+{
+	if (!Canvas)
+	{
+		return;
+	}
+
+	// Determine button color based on state
+	FLinearColor ButtonColor = Button.NormalColor;
+	if (Button.bIsPressed)
+	{
+		ButtonColor = Button.PressedColor;
+	}
+	else if (Button.bIsHovered)
+	{
+		ButtonColor = Button.HoverColor;
+	}
+
+	// Draw button background (simple rectangle)
+	FCanvasTileItem TileItem(Button.Position, Button.Size, ButtonColor);
+	TileItem.BlendMode = SE_BLEND_Translucent;
+	Canvas->DrawItem(TileItem);
+
+	// Draw button border
+	FLinearColor BorderColor = FLinearColor::White;
+	DrawDebugCanvas2DLine(Canvas, Button.Position, FVector2D(Button.Position.X + Button.Size.X, Button.Position.Y), BorderColor, 2.0f);
+	DrawDebugCanvas2DLine(Canvas, FVector2D(Button.Position.X + Button.Size.X, Button.Position.Y), Button.Position + Button.Size, BorderColor, 2.0f);
+	DrawDebugCanvas2DLine(Canvas, Button.Position + Button.Size, FVector2D(Button.Position.X, Button.Position.Y + Button.Size.Y), BorderColor, 2.0f);
+	DrawDebugCanvas2DLine(Canvas, FVector2D(Button.Position.X, Button.Position.Y + Button.Size.Y), Button.Position, BorderColor, 2.0f);
+
+	// Draw button text (centered)
+	FVector2D TextSize;
+	Canvas->TextSize(GEngine->GetMediumFont(), Button.ButtonText, TextSize.X, TextSize.Y);
+	FVector2D TextPosition = Button.Position + (Button.Size - TextSize) * 0.5f;
+	
+	FCanvasTextItem TextItem(TextPosition, FText::FromString(Button.ButtonText), GEngine->GetMediumFont(), FLinearColor::White);
+	TextItem.EnableShadow(FLinearColor::Black);
+	Canvas->DrawItem(TextItem);
+}
+
+bool ANKScannerHUD::IsPointInButton(const FHUDButton& Button, const FVector2D& Point) const
+{
+	return Point.X >= Button.Position.X && 
+		   Point.X <= Button.Position.X + Button.Size.X &&
+		   Point.Y >= Button.Position.Y && 
+		   Point.Y <= Button.Position.Y + Button.Size.Y;
+}
+
+void ANKScannerHUD::NotifyHitBoxClick(FName BoxName)
+{
+	Super::NotifyHitBoxClick(BoxName);
+	
+	// Currently not using hit boxes, manual button detection in mouse events would go here
+}
+
+void ANKScannerHUD::NotifyHitBoxRelease(FName BoxName)
+{
+	Super::NotifyHitBoxRelease(BoxName);
 }
