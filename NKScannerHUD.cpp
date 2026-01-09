@@ -115,22 +115,47 @@ void ANKScannerHUD::DrawHUD()
 
 	// ===== LASER INFO =====
 	DrawSectionHeader(TEXT("LASER:"), YPos);
+	
+	// Show discovery hit (first hit found during validation)
+	if (ScannerCamera->GetScannerState() == EScannerState::Mapping || 
+	    ScannerCamera->GetScannerState() == EScannerState::Complete)
+	{
+		DrawSectionHeader(TEXT("  Discovery Hit (First):"), YPos);
+		FHitResult DiscoveryHit = ScannerCamera->GetFirstHitResult();
+		if (DiscoveryHit.bBlockingHit)
+		{
+			FString HitActorName = DiscoveryHit.GetActor() ? 
+				DiscoveryHit.GetActor()->GetName() : TEXT("Unknown");
+			
+			DrawStatusLine(FString::Printf(TEXT("    Actor: %s"), *HitActorName), YPos, FLinearColor::Green);
+			DrawStatusLine(FString::Printf(TEXT("    Angle: %.1f°"), ScannerCamera->GetFirstHitAngle()), YPos);
+			
+			FVector HitLoc = DiscoveryHit.Location;
+			DrawStatusLine(FString::Printf(TEXT("    Loc: X=%.0f Y=%.0f Z=%.0f"), 
+				HitLoc.X, HitLoc.Y, HitLoc.Z), YPos);
+			DrawStatusLine(FString::Printf(TEXT("    Dist: %.0f cm"), DiscoveryHit.Distance), YPos);
+		}
+	}
+	
+	// Show current orbital hit (most recent hit during mapping)
+	DrawSectionHeader(TEXT("  Current Orbital Hit:"), YPos);
 	if (ScannerCamera->GetLastShotHit())
 	{
 		FString HitActorName = ScannerCamera->GetLastHitActor() ? 
 			ScannerCamera->GetLastHitActor()->GetName() : TEXT("Unknown");
 		
-		DrawStatusLine(FString::Printf(TEXT("Hit: %s (%.0f cm)"), 
-			*HitActorName, ScannerCamera->GetLastHitDistance()), YPos, FLinearColor::Green);
+		DrawStatusLine(FString::Printf(TEXT("    Actor: %s"), *HitActorName), YPos, FLinearColor::Cyan);
 		
 		FVector HitLoc = ScannerCamera->GetLastHitLocation();
-		DrawStatusLine(FString::Printf(TEXT("Loc: X=%.0f Y=%.0f Z=%.0f"), 
+		DrawStatusLine(FString::Printf(TEXT("    Loc: X=%.0f Y=%.0f Z=%.0f"), 
 			HitLoc.X, HitLoc.Y, HitLoc.Z), YPos);
+		DrawStatusLine(FString::Printf(TEXT("    Dist: %.0f cm"), ScannerCamera->GetLastHitDistance()), YPos);
 	}
 	else
 	{
-		DrawStatusLine(TEXT("Hit: NONE"), YPos, FLinearColor::Red);
+		DrawStatusLine(TEXT("    No hit"), YPos, FLinearColor::Red);
 	}
+	
 	DrawStatusLine(FString::Printf(TEXT("Range: %.0f cm"), 
 		ScannerCamera->GetLaserMaxRange()), YPos);
 

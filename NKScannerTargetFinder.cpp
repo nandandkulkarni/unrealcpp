@@ -121,6 +121,12 @@ void ANKScannerCameraActor::OnTargetFinderFailure()
 	LogMessage(FString::Printf(TEXT("STEP 3: No hit at distance %.2f m (after %d attempts in 360° rotation)"), 
 		CinematicOrbitRadius / 100.0f, ValidationAttempts), true);
 	
+	// Log camera state for debugging
+	LogMessage(FString::Printf(TEXT("STEP 3 DEBUG: Camera at %s, LookingAt %s, LaserRange %.2f m"),
+		*GetActorLocation().ToString(),
+		*CinematicLookAtTarget.ToString(),
+		LaserMaxRange / 100.0f), true);
+	
 	// ===== SPIRAL SEARCH: Move outward and try again =====
 	const float MaxSearchDistance = 500000.0f;  // 5000m max (5km)
 	const float DistanceIncrement = 10000.0f;   // 100m per step
@@ -136,6 +142,8 @@ void ANKScannerCameraActor::OnTargetFinderFailure()
 		LogMessage(TEXT("  - Target has no collision geometry"), true);
 		LogMessage(TEXT("  - Wrong laser trace channel (check LaserTraceChannel)"), true);
 		LogMessage(TEXT("  - Target is beyond 5km search radius"), true);
+		LogMessage(FString::Printf(TEXT("  - Camera forward vector: %s"), 
+			*GetCineCameraComponent()->GetForwardVector().ToString()), true);
 		LogMessage(TEXT("TERRAIN MAPPING ABORTED - Cannot map unreachable target!"), true);
 		
 		// Play failure sound
@@ -162,6 +170,8 @@ void ANKScannerCameraActor::OnTargetFinderFailure()
 	FVector NewPosition = CinematicOrbitCenter;
 	NewPosition.Y -= CinematicOrbitRadius;  // Move south
 	SetActorLocation(NewPosition);
+	
+	LogMessage(FString::Printf(TEXT("STEP 3: New camera position: %s"), *NewPosition.ToString()), true);
 	
 	// Ensure laser range is sufficient for new distance
 	float DistanceToTarget = CinematicOrbitRadius;

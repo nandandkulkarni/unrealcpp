@@ -320,6 +320,8 @@ public:
 	bool IsValidating() const { return bIsValidating; }
 	int32 GetValidationAttempts() const { return ValidationAttempts; }
 	float GetCurrentValidationAngle() const { return CurrentValidationAngle; }
+	float GetFirstHitAngle() const { return FirstHitAngle; }
+	FHitResult GetFirstHitResult() const { return FirstHitResult; }
 	
 	// Laser getters
 	bool GetLastShotHit() const { return bLastShotHit; }
