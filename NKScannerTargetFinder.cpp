@@ -118,24 +118,59 @@ void ANKScannerCameraActor::OnTargetFinderSuccess()
 
 void ANKScannerCameraActor::OnTargetFinderFailure()
 {
-	LogMessage(FString::Printf(TEXT("STEP 3 FAILED: No hit found in full 360° rotation (%d attempts)"), 
-		ValidationAttempts), true);
-	LogMessage(TEXT("  Possible issues:"), true);
-	LogMessage(TEXT("  - Target is out of laser range (increase LaserMaxRange)"), true);
-	LogMessage(TEXT("  - Target has no collision geometry"), true);
-	LogMessage(TEXT("  - Wrong laser trace channel (check LaserTraceChannel)"), true);
-	LogMessage(TEXT("  - Target is too small or occluded"), true);
-	LogMessage(FString::Printf(TEXT("  - Try reducing ValidationAngularStepDegrees (currently %.2f°) for more attempts"), 
-		ValidationAngularStepDegrees), true);
-	LogMessage(TEXT("TERRAIN MAPPING ABORTED - Cannot map unreachable target!"), true);
+	LogMessage(FString::Printf(TEXT("STEP 3: No hit at distance %.2f m (after %d attempts in 360° rotation)"), 
+		CinematicOrbitRadius / 100.0f, ValidationAttempts), true);
 	
-	// Play target finder failed sound
-	if (bEnableAudioFeedback && ValidationFailedSound)
+	// ===== SPIRAL SEARCH: Move outward and try again =====
+	const float MaxSearchDistance = 500000.0f;  // 5000m max (5km)
+	const float DistanceIncrement = 10000.0f;   // 100m per step
+	
+	CinematicOrbitRadius += DistanceIncrement;
+	
+	if (CinematicOrbitRadius > MaxSearchDistance)
 	{
-		PlayScannerSound(ValidationFailedSound);
+		// Exhausted search area - abort
+		LogMessage(FString::Printf(TEXT("STEP 3 FAILED: Target not found after searching up to %.2f m"), 
+			MaxSearchDistance / 100.0f), true);
+		LogMessage(TEXT("  Possible issues:"), true);
+		LogMessage(TEXT("  - Target has no collision geometry"), true);
+		LogMessage(TEXT("  - Wrong laser trace channel (check LaserTraceChannel)"), true);
+		LogMessage(TEXT("  - Target is beyond 5km search radius"), true);
+		LogMessage(TEXT("TERRAIN MAPPING ABORTED - Cannot map unreachable target!"), true);
+		
+		// Play failure sound
+		if (bEnableAudioFeedback && ValidationFailedSound)
+		{
+			PlayScannerSound(ValidationFailedSound);
+		}
+		
+		// Exit to idle
+		bIsValidating = false;
+		ScannerState = EScannerState::Idle;
+		return;
 	}
 	
-	// Exit target finder state
-	bIsValidating = false;
-	ScannerState = EScannerState::Idle;
+	// Continue search at new distance
+	LogMessage(FString::Printf(TEXT("STEP 3: Moving outward to %.2f m and retrying..."), 
+		CinematicOrbitRadius / 100.0f), true);
+	
+	// Reset validation for new distance
+	CurrentValidationAngle = 0.0f;
+	ValidationAttempts = 0;
+	
+	// Update camera position to new radius
+	FVector NewPosition = CinematicOrbitCenter;
+	NewPosition.Y -= CinematicOrbitRadius;  // Move south
+	SetActorLocation(NewPosition);
+	
+	// Ensure laser range is sufficient for new distance
+	float DistanceToTarget = CinematicOrbitRadius;
+	if (DistanceToTarget > LaserMaxRange)
+	{
+		LaserMaxRange = DistanceToTarget * 2.0f;
+		LogMessage(FString::Printf(TEXT("STEP 3: Auto-adjusted laser range to %.2f m"), 
+			LaserMaxRange / 100.0f), true);
+	}
+	
+	// Continue validating (don't exit) - next Tick will test new distance
 }

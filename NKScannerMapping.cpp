@@ -82,12 +82,28 @@ void ANKScannerCameraActor::RecordCurrentScanPoint()
 	FHitResult HitResult;
 	bool bHit = PerformLaserTrace(HitResult);
 	
+	// ===== DEBUG: Log trace results =====
+	if (!bHit)
+	{
+		LogMessage(FString::Printf(TEXT("RecordCurrentScanPoint: MISS at angle %.2f° - Camera: %s, LookAt: %s, Range: %.2f"), 
+			CurrentOrbitAngle, 
+			*GetActorLocation().ToString(),
+			*CinematicLookAtTarget.ToString(),
+			LaserMaxRange), true);
+	}
+	
 	if (bHit)
 	{
 		DataPoint.LaserHitLocation = HitResult.Location;
 		DataPoint.LaserHitNormal = HitResult.Normal;
 		DataPoint.HitDistance = HitResult.Distance;
 		DataPoint.HitActorName = HitResult.GetActor() ? HitResult.GetActor()->GetName() : TEXT("None");
+		
+		LogMessage(FString::Printf(TEXT("RecordCurrentScanPoint: HIT at angle %.2f° - Actor: %s, Distance: %.2f, Location: %s"), 
+			CurrentOrbitAngle, 
+			*DataPoint.HitActorName,
+			DataPoint.HitDistance,
+			*HitResult.Location.ToString()), true);
 		
 		// ===== VISUAL DEBUG: Draw spheres and lines at scan points =====
 		if (GetWorld())
@@ -149,21 +165,33 @@ FVector ANKScannerCameraActor::CalculateOrbitPosition(float Angle)
 	// Convert angle to radians
 	float AngleRadians = FMath::DegreesToRadians(Angle);
 	
-	// Calculate position on circular orbit
+	// ===== Calculate position on HORIZONTAL circular orbit =====
+	// Camera orbits in XY plane at FIXED Z height (parallel to ground)
 	FVector Position;
 	Position.X = CinematicOrbitCenter.X + (CinematicOrbitRadius * FMath::Cos(AngleRadians));
 	Position.Y = CinematicOrbitCenter.Y + (CinematicOrbitRadius * FMath::Sin(AngleRadians));
-	Position.Z = CinematicOrbitHeight;
+	Position.Z = CinematicOrbitHeight;  // FIXED HEIGHT - never changes during orbit
 	
 	return Position;
 }
 
 FRotator ANKScannerCameraActor::CalculateLookAtRotation(const FVector& CameraPosition)
 {
-	// Calculate direction from camera to look-at target
+	// ===== Calculate HORIZONTAL look-at rotation =====
+	// Camera looks at target center at THE SAME Z HEIGHT
+	// This ensures laser shoots horizontally (parallel to ground)
 	FVector Direction = CinematicLookAtTarget - CameraPosition;
 	Direction.Normalize();
 	
 	// Convert direction to rotator
-	return Direction.Rotation();
+	FRotator LookAtRot = Direction.Rotation();
+	
+	// Log the pitch to verify horizontal shooting (pitch should be ~0°)
+	if (bEnableVerboseLogging && CurrentOrbitAngle < 10.0f)  // Only log first few angles
+	{
+		LogMessage(FString::Printf(TEXT("CalculateLookAtRotation: Pitch=%.2f° (should be ~0° for horizontal)"), 
+			LookAtRot.Pitch), true);
+	}
+	
+	return LookAtRot;
 }

@@ -72,6 +72,86 @@ void ANKScannerCameraActor::DrawOrbitPath()
 		);
 	}
 	
-	LogMessage(FString::Printf(TEXT("DrawOrbitPath: Orbit circle drawn - Center: %s, Radius: %.2f"), 
-		*CinematicOrbitCenter.ToString(), CinematicOrbitRadius), true);
+	// Draw text label at look-at target
+	if (CinematicTargetLandscape)
+	{
+		DrawDebugString(
+			GetWorld(),
+			CinematicLookAtTarget + FVector(0, 0, 100),
+			FString::Printf(TEXT("Target: %s\nHeight: %.0f%% (Z=%.0f cm)\nRadius: %.0f cm\nORBITS HORIZONTALLY"), 
+				*CinematicTargetLandscape->GetActorLabel(),  // Use label instead of name
+				CinematicHeightPercent,
+				CinematicOrbitHeight,
+				CinematicOrbitRadius),
+			nullptr,
+			FColor::White,
+			DebugVisualsLifetime,
+			true,  // Draw shadow
+			1.5f   // Text scale
+		);
+		
+		// ===== Draw Target Bounding Box =====
+		if (bShowTargetBoundingBox)
+		{
+			FBox TargetBounds = CinematicTargetLandscape->GetComponentsBoundingBox(true);
+			
+			// Draw the bounding box
+			DrawDebugBox(
+				GetWorld(),
+				TargetBounds.GetCenter(),
+				TargetBounds.GetExtent(),
+				BoundingBoxColor,
+				true,  // Persistent
+				DebugVisualsLifetime,
+				0,
+				3.0f  // Thickness
+			);
+			
+			// Draw dimensions text at each corner
+			FVector Min = TargetBounds.Min;
+			FVector Max = TargetBounds.Max;
+			FVector Size = TargetBounds.GetSize();
+			
+			// Draw size labels
+			DrawDebugString(
+				GetWorld(),
+				FVector(Max.X, Max.Y, Max.Z + 50),
+				FString::Printf(TEXT("Size: %.0fx%.0fx%.0f cm\n(%.1fx%.1fx%.1f m)"), 
+					Size.X, Size.Y, Size.Z,
+					Size.X/100.0f, Size.Y/100.0f, Size.Z/100.0f),
+				nullptr,
+				BoundingBoxColor,
+				DebugVisualsLifetime,
+				true,
+				1.2f
+			);
+			
+			// Draw min/max Z markers
+			DrawDebugSphere(
+				GetWorld(),
+				FVector(TargetBounds.GetCenter().X, TargetBounds.GetCenter().Y, Min.Z),
+				20.0f,
+				8,
+				FColor::Blue,  // Blue for bottom
+				true,
+				DebugVisualsLifetime
+			);
+			
+			DrawDebugSphere(
+				GetWorld(),
+				FVector(TargetBounds.GetCenter().X, TargetBounds.GetCenter().Y, Max.Z),
+				20.0f,
+				8,
+				FColor::Purple,  // Purple for top
+				true,
+				DebugVisualsLifetime
+			);
+			
+			LogMessage(FString::Printf(TEXT("DrawOrbitPath: Bounding box drawn - Min: %s, Max: %s, Size: %s"), 
+				*Min.ToString(), *Max.ToString(), *Size.ToString()), true);
+		}
+	}
+	
+	LogMessage(FString::Printf(TEXT("DrawOrbitPath: Horizontal orbit drawn - Center: %s, Radius: %.2f, Height: %.2f"), 
+		*CinematicOrbitCenter.ToString(), CinematicOrbitRadius, CinematicOrbitHeight), true);
 }

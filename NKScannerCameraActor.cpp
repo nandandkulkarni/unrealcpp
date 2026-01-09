@@ -75,10 +75,12 @@ ANKScannerCameraActor::ANKScannerCameraActor(const FObjectInitializer& ObjectIni
 	bShowScanPointSpheres = true;   // Show spheres at scan points
 	bShowScanLines = true;           // Show lines from camera to points
 	bShowOrbitPath = true;           // Show orbit circle
+	bShowTargetBoundingBox = true;   // Show target bounding box
 	ScanPointSphereSize = 15.0f;     // 15cm spheres
 	DebugVisualsLifetime = 60.0f;    // Keep visible for 60 seconds
 	ScanPointColor = FColor::Cyan;   // Cyan spheres
 	ScanLineColor = FColor::Yellow;  // Yellow lines
+	BoundingBoxColor = FColor::Orange; // Orange bounding box
 
 	// Initialize internal state
 	bIsCinematicScanActive = false;
@@ -573,195 +575,58 @@ void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float He
 		FPaths::ProjectSavedDir() / TEXT("ScanData") / TEXT("CinematicScan.json") : OutputJSONPath;
 	
 	// ===== STEP 2: Move to Optimal Mapping Position =====
-	LogMessage(TEXT("STEP 2: Calculating optimal mapping position..."), true);
+	LogMessage(TEXT("STEP 2: Finding optimal mapping position using spiral search..."), true);
 	
 	FBox TargetBounds = TargetLandscape->GetComponentsBoundingBox(true);
 	FVector TargetCenter = TargetBounds.GetCenter();
-	FVector BoundsExtent = TargetBounds.GetExtent();
-	float TargetSize = TargetBounds.GetSize().Size();
 	
-	LogMessage(FString::Printf(TEXT("STEP 2: Target bounds - Center: %s, Extent: %s, Size: %.2f"), 
-		*TargetCenter.ToString(), *BoundsExtent.ToString(), TargetSize), true);
+	LogMessage(FString::Printf(TEXT("STEP 2: Target bounds - Center: %s, Extent: %s"), 
+		*TargetCenter.ToString(), *TargetBounds.GetExtent().ToString()), true);
 	
-	// Calculate optimal distance (1.5x target size for better coverage)
-	float OptimalDistance = FMath::Max(TargetSize * 1.5f, DistanceMeters * 100.0f);
-	float MappingHeight = TargetBounds.Min.Z + 
+	// ===== IMPORTANT: Calculate the height at the specified percentage =====
+	float TargetHeightAtPercent = TargetBounds.Min.Z + 
 		((TargetBounds.Max.Z - TargetBounds.Min.Z) * (HeightPercent / 100.0f));
 	
-	// Position camera at optimal distance (start at East)
-	FVector MappingPosition = TargetCenter;
-	MappingPosition.X += OptimalDistance;
-	MappingPosition.Z = MappingHeight;
+	LogMessage(FString::Printf(TEXT("STEP 2: Scan height at %.0f%% = %.2f cm (%.2f m)"), 
+		HeightPercent, TargetHeightAtPercent, TargetHeightAtPercent / 100.0f), true);
+	
+	// ===== NEW: Spiral search pattern =====
+	// Start at center and move outward in -Y direction until we find a safe distance
+	// This works for ANY object size without relying on bounding box accuracy
+	
+	CinematicOrbitHeight = TargetHeightAtPercent;
+	CinematicOrbitCenter = FVector(TargetCenter.X, TargetCenter.Y, TargetHeightAtPercent);
+	CinematicLookAtTarget = FVector(TargetCenter.X, TargetCenter.Y, TargetHeightAtPercent);
+	
+	// Start with user-requested distance, minimum 100m
+	float SearchDistance = FMath::Max(DistanceMeters * 100.0f, 10000.0f);  // At least 100m
+	float DistanceIncrement = 10000.0f;  // Move outward by 100m each attempt
+	
+	LogMessage(FString::Printf(TEXT("STEP 2: Starting spiral search at %.2f m, incrementing by %.2f m"), 
+		SearchDistance / 100.0f, DistanceIncrement / 100.0f), true);
+	
+	// Position camera at search distance in -Y direction (South)
+	FVector MappingPosition = CinematicOrbitCenter;
+	MappingPosition.Y -= SearchDistance;  // Move south
 	
 	SetActorLocation(MappingPosition);
+	CinematicOrbitRadius = SearchDistance;
 	
-	LogMessage(FString::Printf(TEXT("STEP 2 SUCCESS: Moved to mapping position at %.2f cm from target (height: %.2f cm)"), 
-		OptimalDistance, MappingHeight), true);
+	LogMessage(FString::Printf(TEXT("STEP 2 SUCCESS: Camera positioned at %.2f cm (%.2f m) from target center at height %.2f cm"), 
+		SearchDistance, SearchDistance / 100.0f, TargetHeightAtPercent), true);
 	
-	// Adjust laser range to ensure target is reachable
-	float DistanceToTarget = FVector::Dist(MappingPosition, TargetCenter);
+	// Ensure laser range is sufficient
+	float DistanceToTarget = FVector::Dist(MappingPosition, CinematicLookAtTarget);
 	if (DistanceToTarget > LaserMaxRange)
 	{
 		LaserMaxRange = DistanceToTarget * 2.0f;
-		LogMessage(FString::Printf(TEXT("STEP 2: Auto-adjusted laser range to %.2f cm to reach target"), 
-			LaserMaxRange), true);
+		LogMessage(FString::Printf(TEXT("STEP 2: Auto-adjusted laser range to %.2f cm (%.2f m) to reach target"), 
+			LaserMaxRange, LaserMaxRange / 100.0f), true);
 	}
 	
-	// Setup orbit parameters for validation scan
-	CinematicOrbitCenter = TargetCenter;
-	CinematicOrbitRadius = OptimalDistance;
-	CinematicOrbitHeight = MappingHeight;
-	CinematicLookAtTarget = TargetCenter;
-	
-	// ===== STEP 3: Enter Target Finder State (Incremental Discovery) =====
-	LogMessage(TEXT("STEP 3: Entering target finder state for incremental target discovery..."), true);
-	LogMessage(FString::Printf(TEXT("STEP 3: Will search using %.2f° steps (~%.0f attempts max)"),
-		ValidationAngularStepDegrees, 360.0f / ValidationAngularStepDegrees), true);
-	LogMessage(TEXT("STEP 3: Green lasers will be visible during discovery - watch for RED laser hit!"), true);
-	
-	// Enter target finder state - Tick() will handle incremental search
-	StartTargetFinderState();
-	
-	// Draw the orbit path for visualization
-	if (bShowOrbitPath && GetWorld())
-	{
-		DrawOrbitPath();
-	}
-	
-	// The UpdateTargetFinder() in Tick() will handle the incremental discovery!
-	// Once target is found, it will automatically transition to Step 4
-}
-
-// ========================================================================
-// JSON FUNCTIONS
-// ========================================================================
-
-bool ANKScannerCameraActor::SaveScanDataToJSON(const FString& FilePath)
-{
-	LogMessage(FString::Printf(TEXT("SaveScanDataToJSON: Saving %d data points to: %s"), 
-		RecordedScanData.Num(), *FilePath), true);
-
-	FString JSONString = ConvertScanDataToJSON();
-
-	FString Dir = FPaths::GetPath(FilePath);
-	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-	if (!PlatformFile.DirectoryExists(*Dir))
-	{
-		PlatformFile.CreateDirectoryTree(*Dir);
-		LogMessage(FString::Printf(TEXT("SaveScanDataToJSON: Created directory: %s"), *Dir), true);
-	}
-
-	bool bSuccess = FFileHelper::SaveStringToFile(JSONString, *FilePath);
-
-	if (bSuccess)
-	{
-		LogMessage(FString::Printf(TEXT("SaveScanDataToJSON: Successfully saved %d bytes"), JSONString.Len()), true);
-	}
-	else
-	{
-		LogMessage(TEXT("SaveScanDataToJSON: ERROR - Failed to save file!"), true);
-	}
-
-	return bSuccess;
-}
-
-bool ANKScannerCameraActor::LoadScanDataFromJSON(const FString& FilePath)
-{
-	LogMessage(FString::Printf(TEXT("LoadScanDataFromJSON: Loading from: %s"), *FilePath), true);
-
-	FString JSONString;
-	if (!FFileHelper::LoadFileToString(JSONString, *FilePath))
-	{
-		LogMessage(TEXT("LoadScanDataFromJSON: ERROR - Failed to load file!"), true);
-		return false;
-	}
-
-	LogMessage(FString::Printf(TEXT("LoadScanDataFromJSON: Loaded %d bytes"), JSONString.Len()), true);
-
-	bool bSuccess = ParseJSONToScanData(JSONString);
-
-	if (bSuccess)
-	{
-		LogMessage(FString::Printf(TEXT("LoadScanDataFromJSON: Successfully parsed %d data points"), 
-			RecordedScanData.Num()), true);
-	}
-	else
-	{
-		LogMessage(TEXT("LoadScanDataFromJSON: ERROR - Failed to parse JSON!"), true);
-	}
-
-	return bSuccess;
-}
-
-FString ANKScannerCameraActor::ConvertScanDataToJSON()
-{
-	LogMessage(TEXT("ConvertScanDataToJSON: Converting scan data to JSON"));
-
-	TSharedRef<FJsonObject> RootObject = MakeShared<FJsonObject>();
-	TArray<TSharedPtr<FJsonValue>> DataArray;
-
-	for (const FScanDataPoint& Point : RecordedScanData)
-	{
-		TSharedRef<FJsonObject> PointObject = MakeShared<FJsonObject>();
-		
-		FJsonObjectConverter::UStructToJsonObject(FScanDataPoint::StaticStruct(), &Point, PointObject, 0, 0);
-		DataArray.Add(MakeShareable(new FJsonValueObject(PointObject)));
-	}
-
-	RootObject->SetArrayField(TEXT("ScanData"), DataArray);
-	RootObject->SetNumberField(TEXT("TotalPoints"), RecordedScanData.Num());
-	RootObject->SetStringField(TEXT("Timestamp"), FDateTime::Now().ToString());
-
-	FString OutputString;
-	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
-	FJsonSerializer::Serialize(RootObject, Writer);
-
-	LogMessage(FString::Printf(TEXT("ConvertScanDataToJSON: Generated JSON with %d points"), RecordedScanData.Num()));
-
-	return OutputString;
-}
-
-bool ANKScannerCameraActor::ParseJSONToScanData(const FString& JSONString)
-{
-	LogMessage(TEXT("ParseJSONToScanData: Parsing JSON string"));
-
-	TSharedPtr<FJsonObject> RootObject;
-	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JSONString);
-
-	if (!FJsonSerializer::Deserialize(Reader, RootObject))
-	{
-		LogMessage(TEXT("ParseJSONToScanData: ERROR - Failed to deserialize JSON!"), true);
-		return false;
-	}
-
-	const TArray<TSharedPtr<FJsonValue>>* DataArray;
-	if (!RootObject->TryGetArrayField(TEXT("ScanData"), DataArray))
-	{
-		LogMessage(TEXT("ParseJSONToScanData: ERROR - ScanData array not found!"), true);
-		return false;
-	}
-
-	RecordedScanData.Empty();
-
-	for (const TSharedPtr<FJsonValue>& Value : *DataArray)
-	{
-		FScanDataPoint Point;
-		if (FJsonObjectConverter::JsonObjectToUStruct(Value->AsObject().ToSharedRef(), FScanDataPoint::StaticStruct(), &Point))
-		{
-			RecordedScanData.Add(Point);
-		}
-	}
-
-	LogMessage(FString::Printf(TEXT("ParseJSONToScanData: Parsed %d data points"), RecordedScanData.Num()), true);
-
-	return true;
-}
-
-
-// ========================================================================
-// NOTE: The following implementations are in separate modular files:
-// - Target Finder functions  → NKScannerTargetFinder.cpp
-// - Mapping functions         → NKScannerMapping.cpp  
-// - Audio functions           → NKScannerAudio.cpp
-// - Playback functions        → NKScannerPlayback.cpp
-// ========================================================================
+	// ===== STEP 3: Enter Target Finder State (Spiral Search) =====
+	LogMessage(TEXT("STEP 3: Entering spiral search target finder..."), true);
+	LogMessage(FString::Printf(TEXT("STEP 3: Will search at %.2f m distance using %.2f° steps"),
+		SearchDistance / 100.0f, ValidationAngularStepDegrees), true);
+	LogMessage(TEXT("STEP 3: If no hit found, will move outward by 100m and retry"), true);
+	LogMessage(TEXT("STEP 3: Camera orbits HORIZONTALLY, laser shoots PARALLEL to ground"), true);

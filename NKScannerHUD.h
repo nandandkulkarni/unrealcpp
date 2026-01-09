@@ -44,6 +44,20 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "HUD Settings")
 	float FontScale;
+	
+	// Camera rotation history (last 10 rotations)
+	TArray<FRotator> RotationHistory;
+	int32 MaxRotationHistory;
+	float RotationUpdateTimer;
+	float RotationUpdateInterval;
+	int32 RotationSerialNumber;  // Unique serial number for each rotation
+	TArray<int32> RotationSerialNumbers;  // Serial numbers matching RotationHistory
+	FRotator LastRecordedRotation;  // Track last recorded rotation to detect changes
+	bool bUpdateOnMovement;  // If true, update history on every movement instead of timer
+	
+	// Performance optimization - cache formatted strings
+	int32 FramesSinceLastHUDUpdate;
+	int32 HUDUpdateFrequency;  // Update HUD every N frames (1 = every frame, 2 = every other frame)
 
 	// Helper functions for drawing
 	void DrawStatusLine(const FString& Text, float& YPos, FLinearColor Color = FLinearColor::White);
@@ -52,4 +66,7 @@ private:
 	
 	// Find scanner camera in the level
 	void FindScannerCamera();
+	
+	// Update rotation history
+	void UpdateRotationHistory(const FRotator& CurrentRotation, float DeltaTime);
 };

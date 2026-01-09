@@ -284,6 +284,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
 	bool bShowOrbitPath;
 	
+	/** Show the target's bounding box */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
+	bool bShowTargetBoundingBox;
+	
 	/** Size of scan point spheres (in cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization", meta = (ClampMin = "5.0", ClampMax = "100.0"))
 	float ScanPointSphereSize;
@@ -299,6 +303,10 @@ public:
 	/** Color for scan lines */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
 	FColor ScanLineColor;
+	
+	/** Color for bounding box */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Debug Visualization")
+	FColor BoundingBoxColor;
 
 	// ========================================================================
 	// PUBLIC GETTER FUNCTIONS (For HUD Access)
@@ -325,6 +333,15 @@ public:
 	float GetCurrentOrbitAngle() const { return CurrentOrbitAngle; }
 	int32 GetRecordedDataCount() const { return RecordedScanData.Num(); }
 	float GetCinematicScanElapsedTime() const { return CinematicScanElapsedTime; }
+
+	// Target getters
+	AActor* GetCinematicTargetLandscape() const { return CinematicTargetLandscape; }
+	float GetCinematicHeightPercent() const { return CinematicHeightPercent; }
+	float GetCinematicOrbitHeight() const { return CinematicOrbitHeight; }
+	
+	// Camera position/rotation getters
+	FVector GetCameraPosition() const { return GetActorLocation(); }
+	FRotator GetCameraRotation() const { return GetActorRotation(); }
 
 	// ========================================================================
 	// EVENTS
