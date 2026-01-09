@@ -48,5 +48,12 @@ protected:
 
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
+	
+	/** Toggle mouse cursor for UI interaction */
+	void ToggleUIMode();
+	
+	/** Console command to toggle UI mode */
+	UFUNCTION(Exec)
+	void ToggleUI();
 
 };

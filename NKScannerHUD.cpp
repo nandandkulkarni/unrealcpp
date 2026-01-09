@@ -28,6 +28,10 @@ ANKScannerHUD::ANKScannerHUD()
 	FramesSinceLastHUDUpdate = 0;
 	HUDUpdateFrequency = 1;  // 1 = every frame (no skipping), 2 = every other frame, 3 = every 3rd frame
 	
+	// Initialize mouse input state
+	bMouseCursorEnabled = false;
+	CurrentMousePosition = FVector2D::ZeroVector;
+	
 	// Initialize Start Discovery button
 	StartDiscoveryButton.ButtonText = TEXT("Start Discovery");
 	StartDiscoveryButton.Size = FVector2D(180.0f, 50.0f);
@@ -35,12 +39,41 @@ ANKScannerHUD::ANKScannerHUD()
 	StartDiscoveryButton.HoverColor = FLinearColor(0.2f, 0.4f, 0.6f, 0.9f);
 	StartDiscoveryButton.PressedColor = FLinearColor(0.3f, 0.5f, 0.7f, 1.0f);
 	// Position will be set in DrawHUD based on canvas size
+	
+	// Initialize Start Mapping button
+	StartMappingButton.ButtonText = TEXT("Start Mapping");
+	StartMappingButton.Size = FVector2D(180.0f, 50.0f);
+	StartMappingButton.NormalColor = FLinearColor(0.1f, 0.5f, 0.1f, 0.8f);  // Green
+	StartMappingButton.HoverColor = FLinearColor(0.2f, 0.6f, 0.2f, 0.9f);
+	StartMappingButton.PressedColor = FLinearColor(0.3f, 0.7f, 0.3f, 1.0f);
+	// Position will be set in DrawHUD based on canvas size
+	
+	// Initialize automation checkboxes
+	AutoDiscoveryCheckbox.LabelText = TEXT("Auto-Discovery");
+	AutoDiscoveryCheckbox.BoxSize = 20.0f;
+	AutoDiscoveryCheckbox.BoxColor = FLinearColor::White;
+	AutoDiscoveryCheckbox.CheckColor = FLinearColor(0.0f, 1.0f, 0.0f);  // Green
+	AutoDiscoveryCheckbox.TextColor = FLinearColor(0.9f, 0.9f, 0.9f);
+	
+	AutoMappingCheckbox.LabelText = TEXT("Auto-Mapping");
+	AutoMappingCheckbox.BoxSize = 20.0f;
+	AutoMappingCheckbox.BoxColor = FLinearColor::White;
+	AutoMappingCheckbox.CheckColor = FLinearColor(0.0f, 1.0f, 0.0f);
+	AutoMappingCheckbox.TextColor = FLinearColor(0.9f, 0.9f, 0.9f);
+	
+	AutoResetCheckbox.LabelText = TEXT("Auto-Reset");
+	AutoResetCheckbox.BoxSize = 20.0f;
+	AutoResetCheckbox.BoxColor = FLinearColor::White;
+	AutoResetCheckbox.CheckColor = FLinearColor(0.0f, 1.0f, 0.0f);
+	AutoResetCheckbox.TextColor = FLinearColor(0.9f, 0.9f, 0.9f);
 }
 
 void ANKScannerHUD::BeginPlay()
 {
 	Super::BeginPlay();
 	FindScannerCamera();
+	// Don't enable mouse cursor by default - let player toggle it
+	// EnableMouseCursor();  // REMOVED - now toggled with Tab key
 }
 
 void ANKScannerHUD::DrawHUD()
@@ -63,16 +96,102 @@ void ANKScannerHUD::DrawHUD()
 		return;
 	}
 	
+	// Update mouse hover states
+	UpdateMouseHover();
+	
 	// ===== DRAW START DISCOVERY BUTTON (TOP-RIGHT) =====
 	if (Canvas)
 	{
-		// Position button in top-right corner (with padding)
 		float ButtonPadding = 20.0f;
+		float ButtonSpacing = 10.0f;  // Space between buttons
+		EScannerState CurrentState = ScannerCamera->GetScannerState();
+		
+		// ===== DRAW START DISCOVERY BUTTON =====
+		// Position button in top-right corner (with padding)
 		StartDiscoveryButton.Position = FVector2D(
 			Canvas->SizeX - StartDiscoveryButton.Size.X - ButtonPadding,
 			ButtonPadding
 		);
+		
+		// Update button text based on scanner state
+		if (CurrentState == EScannerState::Idle)
+		{
+			StartDiscoveryButton.ButtonText = TEXT("Start Discovery");
+			StartDiscoveryButton.NormalColor = FLinearColor(0.1f, 0.5f, 0.1f, 0.8f);  // Green
+		}
+		else if (CurrentState == EScannerState::Validating)
+		{
+			StartDiscoveryButton.ButtonText = TEXT("Cancel Discovery");
+			StartDiscoveryButton.NormalColor = FLinearColor(0.7f, 0.3f, 0.0f, 0.8f);  // Orange
+		}
+		else if (CurrentState == EScannerState::Mapping)
+		{
+			StartDiscoveryButton.ButtonText = TEXT("Stop Mapping");
+			StartDiscoveryButton.NormalColor = FLinearColor(0.7f, 0.3f, 0.0f, 0.8f);  // Orange
+		}
+		else if (CurrentState == EScannerState::Complete)
+		{
+			StartDiscoveryButton.ButtonText = TEXT("Reset Scanner");
+			StartDiscoveryButton.NormalColor = FLinearColor(0.3f, 0.3f, 0.7f, 0.8f);  // Blue
+		}
+		
 		DrawButton(StartDiscoveryButton);
+		
+		// Add hit box for button click detection
+		AddHitBox(StartDiscoveryButton.Position, StartDiscoveryButton.Size, 
+			FName("StartDiscoveryButton"), false, 0);
+		
+		// ===== DRAW START MAPPING BUTTON (BELOW DISCOVERY BUTTON) =====
+		// Only show this button when we need manual mapping start
+		// Show when: Discovery complete but mapping hasn't started, and auto-mapping is OFF
+		bool bShowMappingButton = (CurrentState == EScannerState::Validating && 
+								   ScannerCamera->GetValidationAttempts() > 0 &&
+								   !ScannerCamera->bAutoStartMapping);
+		
+		if (bShowMappingButton)
+		{
+			StartMappingButton.Position = FVector2D(
+				Canvas->SizeX - StartMappingButton.Size.X - ButtonPadding,
+				ButtonPadding + StartDiscoveryButton.Size.Y + ButtonSpacing
+			);
+			
+			DrawButton(StartMappingButton);
+			
+			AddHitBox(StartMappingButton.Position, StartMappingButton.Size,
+				FName("StartMappingButton"), false, 0);
+		}
+		
+		// ===== DRAW AUTOMATION CHECKBOXES (BELOW BUTTONS) =====
+		float CheckboxYStart = StartDiscoveryButton.Position.Y + StartDiscoveryButton.Size.Y + ButtonSpacing;
+		
+		// Add extra space if mapping button is showing
+		if (bShowMappingButton)
+		{
+			CheckboxYStart += StartMappingButton.Size.Y + ButtonSpacing;
+		}
+		
+		CheckboxYStart += 5.0f;  // Extra padding before checkboxes
+		
+		float CheckboxSpacing = 30.0f;
+		float CheckboxXPos = Canvas->SizeX - 200.0f;  // Align with button roughly
+		
+		// Auto-Discovery checkbox
+		AutoDiscoveryCheckbox.Position = FVector2D(CheckboxXPos, CheckboxYStart);
+		DrawCheckbox(AutoDiscoveryCheckbox, ScannerCamera->bAutoStartDiscovery);
+		AddHitBox(AutoDiscoveryCheckbox.Position, FVector2D(AutoDiscoveryCheckbox.BoxSize, AutoDiscoveryCheckbox.BoxSize),
+			FName("AutoDiscoveryCheckbox"), false, 0);
+		
+		// Auto-Mapping checkbox
+		AutoMappingCheckbox.Position = FVector2D(CheckboxXPos, CheckboxYStart + CheckboxSpacing);
+		DrawCheckbox(AutoMappingCheckbox, ScannerCamera->bAutoStartMapping);
+		AddHitBox(AutoMappingCheckbox.Position, FVector2D(AutoMappingCheckbox.BoxSize, AutoMappingCheckbox.BoxSize),
+			FName("AutoMappingCheckbox"), false, 0);
+		
+		// Auto-Reset checkbox
+		AutoResetCheckbox.Position = FVector2D(CheckboxXPos, CheckboxYStart + CheckboxSpacing * 2);
+		DrawCheckbox(AutoResetCheckbox, ScannerCamera->bAutoResetAfterMapping);
+		AddHitBox(AutoResetCheckbox.Position, FVector2D(AutoResetCheckbox.BoxSize, AutoResetCheckbox.BoxSize),
+			FName("AutoResetCheckbox"), false, 0);
 	}
 
 	float YPos = HUDYPosition;
@@ -80,6 +199,28 @@ void ANKScannerHUD::DrawHUD()
 	// ===== HEADER =====
 	DrawSectionHeader(TEXT("=== SCANNER STATUS ==="), YPos);
 	YPos += LineHeight * 0.5f;
+	
+	// ===== INPUT MODE INDICATOR =====
+	APlayerController* PC = GetOwningPlayerController();
+	if (PC)
+	{
+		FString ModeText;
+		FLinearColor ModeColor;
+		
+		if (PC->bShowMouseCursor)
+		{
+			ModeText = TEXT("MODE: UI (Mouse Visible) - Press Tab for Camera");
+			ModeColor = FLinearColor(0.0f, 1.0f, 1.0f);  // Cyan
+		}
+		else
+		{
+			ModeText = TEXT("MODE: CAMERA (Mouse Hidden) - Press Tab for UI");
+			ModeColor = FLinearColor(1.0f, 0.5f, 0.0f);  // Orange
+		}
+		
+		DrawStatusLine(ModeText, YPos, ModeColor);
+		YPos += LineHeight * 0.5f;  // Extra space after mode indicator
+	}
 	
 	// ===== CAMERA POSITION =====
 	FVector CamPos = ScannerCamera->GetCameraPosition();
@@ -434,10 +575,292 @@ void ANKScannerHUD::NotifyHitBoxClick(FName BoxName)
 {
 	Super::NotifyHitBoxClick(BoxName);
 	
-	// Currently not using hit boxes, manual button detection in mouse events would go here
+	if (!ScannerCamera)
+	{
+		return;
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Hit box clicked: %s"), *BoxName.ToString());
+	
+	// Handle button click - Start Discovery workflow
+	if (BoxName == "StartDiscoveryButton")
+	{
+		StartDiscoveryButton.bIsPressed = true;
+		
+		EScannerState CurrentState = ScannerCamera->GetScannerState();
+		AActor* Target = ScannerCamera->GetCinematicTargetLandscape();
+		
+		// Check if we have a target set
+		if (!Target)
+		{
+			UE_LOG(LogTemp, Error, TEXT("NKScannerHUD: Cannot start discovery - no target landscape set!"));
+			UE_LOG(LogTemp, Error, TEXT("NKScannerHUD: Please set 'Cinematic Target Landscape' in the Details panel"));
+			return;
+		}
+		
+		// State-based button behavior
+		if (CurrentState == EScannerState::Idle)
+		{
+			// Start the discovery workflow
+			UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Starting discovery workflow for target '%s'"), 
+				*Target->GetActorLabel());
+			
+			ScannerCamera->StartCinematicScan(
+				Target,
+				ScannerCamera->CinematicHeightPercent,
+				ScannerCamera->CinematicDistanceMeters,
+				ScannerCamera->CinematicJSONOutputPath
+			);
+		}
+		else if (CurrentState == EScannerState::Validating || CurrentState == EScannerState::Mapping)
+		{
+			// Cancel ongoing scan
+			UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Cancelling active scan (state: %d)"), (int32)CurrentState);
+			ScannerCamera->StopCinematicScan();
+		}
+		else if (CurrentState == EScannerState::Complete)
+		{
+			// Reset to idle to allow restart
+			UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Resetting scanner to Idle state"));
+			// TODO: Add a ResetScanner() function to properly reset state
+		}
+		
+		return;
+	}
+	
+	// Handle Start Mapping button click
+	if (BoxName == "StartMappingButton")
+	{
+		StartMappingButton.bIsPressed = true;
+		
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Start Mapping button clicked!"));
+		
+		// Manually trigger the transition from discovery to mapping
+		// This would normally happen automatically if bAutoStartMapping was true
+		// TODO: Add a method in Scanner Camera to manually start mapping phase
+		// For now, we can enable auto-mapping temporarily to trigger the transition
+		
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Transitioning from Discovery to Mapping phase"));
+		
+		// The scanner's UpdateTargetFinder should handle this transition
+		// We just need to signal that we want to proceed
+		
+		return;
+	}
+	
+	// Handle checkbox clicks - toggle the values
+	if (BoxName == "AutoDiscoveryCheckbox")
+	{
+		ScannerCamera->bAutoStartDiscovery = !ScannerCamera->bAutoStartDiscovery;
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Auto-Discovery toggled to %s"), 
+			ScannerCamera->bAutoStartDiscovery ? TEXT("ON") : TEXT("OFF"));
+		return;
+	}
+	
+	if (BoxName == "AutoMappingCheckbox")
+	{
+		ScannerCamera->bAutoStartMapping = !ScannerCamera->bAutoStartMapping;
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Auto-Mapping toggled to %s"), 
+			ScannerCamera->bAutoStartMapping ? TEXT("ON") : TEXT("OFF"));
+		return;
+	}
+	
+	if (BoxName == "AutoResetCheckbox")
+	{
+		ScannerCamera->bAutoResetAfterMapping = !ScannerCamera->bAutoResetAfterMapping;
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Auto-Reset toggled to %s"), 
+			ScannerCamera->bAutoResetAfterMapping ? TEXT("ON") : TEXT("OFF"));
+		return;
+	}
 }
 
 void ANKScannerHUD::NotifyHitBoxRelease(FName BoxName)
 {
 	Super::NotifyHitBoxRelease(BoxName);
+	
+	// Release button pressed states
+	if (BoxName == "StartDiscoveryButton")
+	{
+		StartDiscoveryButton.bIsPressed = false;
+	}
+	else if (BoxName == "StartMappingButton")
+	{
+		StartMappingButton.bIsPressed = false;
+	}
+}
+
+void ANKScannerHUD::DrawCheckbox(FHUDCheckbox& Checkbox, bool bIsChecked)
+{
+	if (!Canvas)
+	{
+		return;
+	}
+
+	// Draw checkbox box
+	FLinearColor BoxDrawColor = Checkbox.bIsHovered ? FLinearColor(1.0f, 1.0f, 0.0f, 1.0f) : Checkbox.BoxColor;
+	
+	// Draw box background (slightly transparent dark background)
+	FCanvasTileItem BoxBg(Checkbox.Position, FVector2D(Checkbox.BoxSize, Checkbox.BoxSize), FLinearColor(0.1f, 0.1f, 0.1f, 0.8f));
+	BoxBg.BlendMode = SE_BLEND_Translucent;
+	Canvas->DrawItem(BoxBg);
+	
+	// Draw box border
+	DrawDebugCanvas2DLine(Canvas, Checkbox.Position, FVector2D(Checkbox.Position.X + Checkbox.BoxSize, Checkbox.Position.Y), BoxDrawColor, 2.0f);
+	DrawDebugCanvas2DLine(Canvas, FVector2D(Checkbox.Position.X + Checkbox.BoxSize, Checkbox.Position.Y), Checkbox.Position + FVector2D(Checkbox.BoxSize, Checkbox.BoxSize), BoxDrawColor, 2.0f);
+	DrawDebugCanvas2DLine(Canvas, Checkbox.Position + FVector2D(Checkbox.BoxSize, Checkbox.BoxSize), FVector2D(Checkbox.Position.X, Checkbox.Position.Y + Checkbox.BoxSize), BoxDrawColor, 2.0f);
+	DrawDebugCanvas2DLine(Canvas, FVector2D(Checkbox.Position.X, Checkbox.Position.Y + Checkbox.BoxSize), Checkbox.Position, BoxDrawColor, 2.0f);
+
+	// Draw checkmark if checked (simple X pattern)
+	if (bIsChecked)
+	{
+		float CheckPadding = 4.0f;
+		FVector2D CheckStart1 = Checkbox.Position + FVector2D(CheckPadding, CheckPadding);
+		FVector2D CheckEnd1 = Checkbox.Position + FVector2D(Checkbox.BoxSize - CheckPadding, Checkbox.BoxSize - CheckPadding);
+		FVector2D CheckStart2 = Checkbox.Position + FVector2D(Checkbox.BoxSize - CheckPadding, CheckPadding);
+		FVector2D CheckEnd2 = Checkbox.Position + FVector2D(CheckPadding, Checkbox.BoxSize - CheckPadding);
+		
+		DrawDebugCanvas2DLine(Canvas, CheckStart1, CheckEnd1, Checkbox.CheckColor, 3.0f);
+		DrawDebugCanvas2DLine(Canvas, CheckStart2, CheckEnd2, Checkbox.CheckColor, 3.0f);
+	}
+
+	// Draw label text next to checkbox
+	FVector2D TextPosition = Checkbox.Position + FVector2D(Checkbox.BoxSize + 8.0f, 0.0f);
+	FCanvasTextItem TextItem(TextPosition, FText::FromString(Checkbox.LabelText), GEngine->GetSmallFont(), Checkbox.TextColor);
+	TextItem.EnableShadow(FLinearColor::Black);
+	Canvas->DrawItem(TextItem);
+}
+
+bool ANKScannerHUD::IsPointInCheckbox(const FHUDCheckbox& Checkbox, const FVector2D& Point) const
+{
+	return Point.X >= Checkbox.Position.X && 
+		   Point.X <= Checkbox.Position.X + Checkbox.BoxSize &&
+		   Point.Y >= Checkbox.Position.Y && 
+		   Point.Y <= Checkbox.Position.Y + Checkbox.BoxSize;
+}
+
+void ANKScannerHUD::EnableMouseCursor()
+{
+	APlayerController* PC = GetOwningPlayerController();
+	if (PC)
+	{
+		PC->bShowMouseCursor = true;
+		PC->bEnableClickEvents = true;
+		PC->bEnableMouseOverEvents = true;
+		bMouseCursorEnabled = true;
+		
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Mouse cursor ENABLED for UI interaction"));
+	}
+}
+
+void ANKScannerHUD::DisableMouseCursor()
+{
+	APlayerController* PC = GetOwningPlayerController();
+	if (PC)
+	{
+		PC->bShowMouseCursor = false;
+		PC->bEnableClickEvents = false;
+		PC->bEnableMouseOverEvents = false;
+		bMouseCursorEnabled = false;
+		
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Mouse cursor DISABLED for camera control"));
+	}
+}
+
+void ANKScannerHUD::ToggleMouseCursor()
+{
+	if (bMouseCursorEnabled)
+	{
+		DisableMouseCursor();
+	}
+	else
+	{
+		EnableMouseCursor();
+	}
+}
+
+void ANKScannerHUD::UpdateMouseHover()
+{
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC)
+	{
+		return;
+	}
+
+	// Get current mouse position
+	float MouseX, MouseY;
+	if (PC->GetMousePosition(MouseX, MouseY))
+	{
+		CurrentMousePosition = FVector2D(MouseX, MouseY);
+		
+		// Update button hover state
+		StartDiscoveryButton.bIsHovered = IsPointInButton(StartDiscoveryButton, CurrentMousePosition);
+		StartMappingButton.bIsHovered = IsPointInButton(StartMappingButton, CurrentMousePosition);
+		
+		// Update checkbox hover states
+		AutoDiscoveryCheckbox.bIsHovered = IsPointInCheckbox(AutoDiscoveryCheckbox, CurrentMousePosition);
+		AutoMappingCheckbox.bIsHovered = IsPointInCheckbox(AutoMappingCheckbox, CurrentMousePosition);
+		AutoResetCheckbox.bIsHovered = IsPointInCheckbox(AutoResetCheckbox, CurrentMousePosition);
+	}
+}
+
+void ANKScannerHUD::HandleMouseClick()
+{
+	if (!ScannerCamera)
+	{
+		return;
+	}
+
+	// Check button click
+	if (IsPointInButton(StartDiscoveryButton, CurrentMousePosition))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Start Discovery button clicked!"));
+		// TODO: Implement button action based on current state
+		// For now, just log the click
+		return;
+	}
+
+	if (IsPointInButton(StartMappingButton, CurrentMousePosition))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Start Mapping button clicked!"));
+		// TODO: Implement button action based on current state
+		// For now, just log the click
+		return;
+	}
+
+	// Check checkbox clicks
+	if (IsPointInCheckbox(AutoDiscoveryCheckbox, CurrentMousePosition))
+	{
+		ScannerCamera->bAutoStartDiscovery = !ScannerCamera->bAutoStartDiscovery;
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Auto-Discovery toggled to %s"), 
+			ScannerCamera->bAutoStartDiscovery ? TEXT("ON") : TEXT("OFF"));
+		return;
+	}
+
+	if (IsPointInCheckbox(AutoMappingCheckbox, CurrentMousePosition))
+	{
+		ScannerCamera->bAutoStartMapping = !ScannerCamera->bAutoStartMapping;
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Auto-Mapping toggled to %s"), 
+			ScannerCamera->bAutoStartMapping ? TEXT("ON") : TEXT("OFF"));
+		return;
+	}
+
+	if (IsPointInCheckbox(AutoResetCheckbox, CurrentMousePosition))
+	{
+		ScannerCamera->bAutoResetAfterMapping = !ScannerCamera->bAutoResetAfterMapping;
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Auto-Reset toggled to %s"), 
+			ScannerCamera->bAutoResetAfterMapping ? TEXT("ON") : TEXT("OFF"));
+		return;
+	}
+}
+
+bool ANKScannerHUD::ProcessConsoleExec(const TCHAR* Cmd, FOutputDevice& Ar, UObject* Executor)
+{
+	// Intercept left mouse button clicks
+	if (FParse::Command(&Cmd, TEXT("LeftMouseClick")))
+	{
+		HandleMouseClick();
+		return true;
+	}
+	
+	return Super::ProcessConsoleExec(Cmd, Ar, Executor);
 }

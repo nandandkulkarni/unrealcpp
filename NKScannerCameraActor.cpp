@@ -71,6 +71,11 @@ ANKScannerCameraActor::ANKScannerCameraActor(const FObjectInitializer& ObjectIni
 	// Initialize HUD settings
 	bShowDebugHUD = true;  // Show HUD by default
 	
+	// Initialize automation settings
+	bAutoStartDiscovery = false;  // Manual start by default - user must click button
+	bAutoStartMapping = false;     // Manual start mapping - user must click button
+	bAutoResetAfterMapping = false; // Don't auto-reset by default
+	
 	// Initialize debug visualization settings
 	bShowScanPointSpheres = true;   // Show spheres at scan points
 	bShowScanLines = true;           // Show lines from camera to points
@@ -193,7 +198,7 @@ void ANKScannerCameraActor::BeginPlay()
 		LaserMaxRange, bShowLaserBeam ? TEXT("true") : TEXT("false"), bContinuousLaserShoot ? TEXT("true") : TEXT("false")), true);
 	
 	// ===== AUTO-START TERRAIN MAPPING ON PLAY =====
-	if (CinematicTargetLandscape && bScannerEnabled)
+	if (CinematicTargetLandscape && bScannerEnabled && bAutoStartDiscovery)
 	{
 		LogMessage(TEXT("BeginPlay: Auto-starting terrain mapping..."), true);
 		LogMessage(FString::Printf(TEXT("BeginPlay: Target already set to '%s' - initiating 4-step workflow"), 
@@ -218,6 +223,11 @@ void ANKScannerCameraActor::BeginPlay()
 		if (!bScannerEnabled)
 		{
 			LogMessage(TEXT("BeginPlay: Scanner is disabled - terrain mapping will NOT auto-start"), true);
+		}
+		
+		if (!bAutoStartDiscovery)
+		{
+			LogMessage(TEXT("BeginPlay: Auto-Discovery is disabled - click 'Start Discovery' button to begin"), true);
 		}
 	}
 }

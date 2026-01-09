@@ -269,6 +269,22 @@ public:
 	bool bShowDebugHUD;
 	
 	// ========================================================================
+	// AUTOMATION SETTINGS
+	// ========================================================================
+	
+	/** Automatically start discovery on BeginPlay if target is set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Automation")
+	bool bAutoStartDiscovery;
+	
+	/** Automatically start mapping when target is discovered */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Automation")
+	bool bAutoStartMapping;
+	
+	/** Automatically reset to Idle state after mapping completes */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AAScanner|Automation")
+	bool bAutoResetAfterMapping;
+	
+	// ========================================================================
 	// DEBUG VISUALIZATION
 	// ========================================================================
 	

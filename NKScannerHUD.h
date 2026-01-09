@@ -39,6 +39,34 @@ struct FHUDButton
 };
 
 /**
+ * Simple checkbox structure for HUD checkboxes
+ */
+USTRUCT()
+struct FHUDCheckbox
+{
+	GENERATED_BODY()
+
+	FString LabelText;
+	FVector2D Position;
+	float BoxSize;
+	FLinearColor BoxColor;
+	FLinearColor CheckColor;
+	FLinearColor TextColor;
+	bool bIsHovered;
+
+	FHUDCheckbox()
+		: LabelText(TEXT("Checkbox"))
+		, Position(FVector2D::ZeroVector)
+		, BoxSize(20.0f)
+		, BoxColor(FLinearColor::White)
+		, CheckColor(FLinearColor::Green)
+		, TextColor(FLinearColor::White)
+		, bIsHovered(false)
+	{
+	}
+};
+
+/**
  * HUD class that displays detailed scanner status information
  * Shows real-time data in the top-left corner of the screen
  */
@@ -56,10 +84,20 @@ public:
 	// Handle mouse input for buttons
 	virtual void NotifyHitBoxClick(FName BoxName) override;
 	virtual void NotifyHitBoxRelease(FName BoxName) override;
+	
+	// Handle mouse input events
+	virtual bool ProcessConsoleExec(const TCHAR* Cmd, FOutputDevice& Ar, UObject* Executor) override;
 
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
+	
+	// Mouse input handling
+	void EnableMouseCursor();
+	void DisableMouseCursor();
+	void ToggleMouseCursor();
+	void HandleMouseClick();
+	void UpdateMouseHover();
 
 private:
 	// Reference to the scanner camera actor
@@ -82,6 +120,14 @@ private:
 	// Button for starting discovery
 	FHUDButton StartDiscoveryButton;
 	
+	// Button for starting mapping (shown after discovery)
+	FHUDButton StartMappingButton;
+	
+	// Checkboxes for automation settings
+	FHUDCheckbox AutoDiscoveryCheckbox;
+	FHUDCheckbox AutoMappingCheckbox;
+	FHUDCheckbox AutoResetCheckbox;
+	
 	// Camera rotation history (last 10 rotations)
 	TArray<FRotator> RotationHistory;
 	int32 MaxRotationHistory;
@@ -95,6 +141,10 @@ private:
 	// Performance optimization - cache formatted strings
 	int32 FramesSinceLastHUDUpdate;
 	int32 HUDUpdateFrequency;  // Update HUD every N frames (1 = every frame, 2 = every other frame)
+	
+	// Mouse input state
+	bool bMouseCursorEnabled;
+	FVector2D CurrentMousePosition;
 
 	// Helper functions for drawing
 	void DrawStatusLine(const FString& Text, float& YPos, FLinearColor Color = FLinearColor::White);
@@ -104,6 +154,10 @@ private:
 	// Button drawing and interaction
 	void DrawButton(FHUDButton& Button);
 	bool IsPointInButton(const FHUDButton& Button, const FVector2D& Point) const;
+	
+	// Checkbox drawing and interaction
+	void DrawCheckbox(FHUDCheckbox& Checkbox, bool bIsChecked);
+	bool IsPointInCheckbox(const FHUDCheckbox& Checkbox, const FVector2D& Point) const;
 	
 	// Find scanner camera in the level
 	void FindScannerCamera();
