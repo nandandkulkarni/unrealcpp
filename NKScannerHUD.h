@@ -123,6 +123,9 @@ private:
 	// Button for starting mapping (shown after discovery)
 	FHUDButton StartMappingButton;
 	
+	// Button for clearing discovery lines
+	FHUDButton ClearDiscoveryLinesButton;
+	
 	// Checkboxes for automation settings
 	FHUDCheckbox AutoDiscoveryCheckbox;
 	FHUDCheckbox AutoMappingCheckbox;

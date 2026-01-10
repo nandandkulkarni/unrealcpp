@@ -82,7 +82,7 @@ ANKScannerCameraActor::ANKScannerCameraActor(const FObjectInitializer& ObjectIni
 	bShowOrbitPath = true;           // Show orbit circle
 	bShowTargetBoundingBox = true;   // Show target bounding box
 	ScanPointSphereSize = 15.0f;     // 15cm spheres
-	DebugVisualsLifetime = 60.0f;    // Keep visible for 60 seconds
+	DebugVisualsLifetime = -1.0f;    // Infinite - stay visible until manually cleared
 	ScanPointColor = FColor::Cyan;   // Cyan spheres
 	ScanLineColor = FColor::Yellow;  // Yellow lines
 	BoundingBoxColor = FColor::Orange; // Orange bounding box
@@ -653,12 +653,13 @@ void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float He
 			LaserMaxRange, LaserMaxRange / 100.0f), true);
 	}
 	
-	// ===== STEP 3: Enter Target Finder State (Spiral Search) =====
-	LogMessage(TEXT("STEP 3: Entering spiral search target finder..."), true);
-	LogMessage(FString::Printf(TEXT("STEP 3: Will search at %.2f m distance using %.2f° steps"),
+	
+	// ===== STEP 3: Enter Target Finder State (Discovery) =====
+	LogMessage(TEXT("STEP 3: Entering target discovery phase..."), true);
+	LogMessage(FString::Printf(TEXT("STEP 3: Will rotate in place at %.2f m distance using %.2f° steps"),
 		SearchDistance / 100.0f, ValidationAngularStepDegrees), true);
-	LogMessage(TEXT("STEP 3: If no hit found, will move outward by 100m and retry"), true);
-	LogMessage(TEXT("STEP 3: Camera orbits HORIZONTALLY, laser shoots PARALLEL to ground"), true);
+	LogMessage(TEXT("STEP 3: Camera will ROTATE IN PLACE (not orbit) to sweep 360°"), true);
+	LogMessage(TEXT("STEP 3: Laser shoots HORIZONTALLY (parallel to ground)"), true);
 	
 	// Enter target finder state - Tick() will handle incremental search
 	StartTargetFinderState();
@@ -669,8 +670,8 @@ void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float He
 		DrawOrbitPath();
 	}
 	
-	// The UpdateTargetFinder() in Tick() will handle the spiral search!
-	// Once target is found, it will automatically transition to Step 4
+	// The UpdateTargetFinder() in Tick() will handle the discovery!
+	// Camera will rotate in place until first hit is found
 }
 
 // ========================================================================

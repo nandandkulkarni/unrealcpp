@@ -48,6 +48,14 @@ ANKScannerHUD::ANKScannerHUD()
 	StartMappingButton.PressedColor = FLinearColor(0.3f, 0.7f, 0.3f, 1.0f);
 	// Position will be set in DrawHUD based on canvas size
 	
+	// Initialize Clear Discovery Lines button
+	ClearDiscoveryLinesButton.ButtonText = TEXT("Clear Discovery Lines");
+	ClearDiscoveryLinesButton.Size = FVector2D(200.0f, 40.0f);
+	ClearDiscoveryLinesButton.NormalColor = FLinearColor(0.6f, 0.2f, 0.1f, 0.8f);  // Red/Orange
+	ClearDiscoveryLinesButton.HoverColor = FLinearColor(0.7f, 0.3f, 0.2f, 0.9f);
+	ClearDiscoveryLinesButton.PressedColor = FLinearColor(0.8f, 0.4f, 0.3f, 1.0f);
+	// Position will be set in DrawHUD based on canvas size
+	
 	// Initialize automation checkboxes
 	AutoDiscoveryCheckbox.LabelText = TEXT("Auto-Discovery");
 	AutoDiscoveryCheckbox.BoxSize = 20.0f;
@@ -200,6 +208,17 @@ void ANKScannerHUD::DrawHUD()
 		DrawCheckbox(AutoResetCheckbox, ScannerCamera->bAutoResetAfterMapping);
 		AddHitBox(AutoResetCheckbox.Position, FVector2D(AutoResetCheckbox.BoxSize, AutoResetCheckbox.BoxSize),
 			FName("AutoResetCheckbox"), false, 0);
+		
+		// ===== DRAW CLEAR DISCOVERY LINES BUTTON (BELOW CHECKBOXES) =====
+		float ClearButtonY = CheckboxYStart + (CheckboxSpacing * 3) + 10.0f;  // Extra padding
+		ClearDiscoveryLinesButton.Position = FVector2D(
+			Canvas->SizeX - ClearDiscoveryLinesButton.Size.X - ButtonPadding,
+			ClearButtonY
+		);
+		
+		DrawButton(ClearDiscoveryLinesButton);
+		AddHitBox(ClearDiscoveryLinesButton.Position, ClearDiscoveryLinesButton.Size,
+			FName("ClearDiscoveryLinesButton"), false, 0);
 	}
 
 	float YPos = HUDYPosition;
@@ -260,9 +279,16 @@ void ANKScannerHUD::DrawHUD()
 	// Show target finder info if validating
 	if (ScannerCamera->IsValidating())
 	{
-		DrawStatusLine(FString::Printf(TEXT("Discovery: Attempt %d | Angle %.1f°"), 
-			ScannerCamera->GetValidationAttempts(),
-			ScannerCamera->GetCurrentValidationAngle()), YPos, FLinearColor::Yellow);
+		int32 ShotCount = ScannerCamera->GetValidationAttempts();
+		float CurrentAngle = ScannerCamera->GetCurrentValidationAngle();
+		
+		DrawStatusLine(FString::Printf(TEXT("Discovery: Shot %d | Angle %.1f°"), 
+			ShotCount, CurrentAngle), YPos, FLinearColor::Yellow);
+		
+		// Show progress bar
+		float ProgressPercent = (CurrentAngle / 360.0f) * 100.0f;
+		DrawStatusLine(FString::Printf(TEXT("Progress: %.1f%% of 360° sweep"), 
+			ProgressPercent), YPos, FLinearColor(1.0f, 0.8f, 0.0f));
 	}
 
 	YPos += LineHeight * 0.5f;
@@ -689,6 +715,23 @@ void ANKScannerHUD::NotifyHitBoxClick(FName BoxName)
 			ScannerCamera->bAutoResetAfterMapping ? TEXT("ON") : TEXT("OFF"));
 		return;
 	}
+	
+	// Handle Clear Discovery Lines button
+	if (BoxName == "ClearDiscoveryLinesButton")
+	{
+		ClearDiscoveryLinesButton.bIsPressed = true;
+		
+		UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Clearing all discovery lines"));
+		
+		// Clear all persistent debug lines in the world
+		if (GetWorld())
+		{
+			FlushPersistentDebugLines(GetWorld());
+			UE_LOG(LogTemp, Warning, TEXT("NKScannerHUD: Discovery lines cleared successfully"));
+		}
+		
+		return;
+	}
 }
 
 void ANKScannerHUD::NotifyHitBoxRelease(FName BoxName)
@@ -703,6 +746,10 @@ void ANKScannerHUD::NotifyHitBoxRelease(FName BoxName)
 	else if (BoxName == "StartMappingButton")
 	{
 		StartMappingButton.bIsPressed = false;
+	}
+	else if (BoxName == "ClearDiscoveryLinesButton")
+	{
+		ClearDiscoveryLinesButton.bIsPressed = false;
 	}
 }
 
