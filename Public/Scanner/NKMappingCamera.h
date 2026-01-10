@@ -24,6 +24,70 @@ enum class EMappingScannerState : uint8
 	Complete UMETA(DisplayName = "Complete")
 };
 
+// Camera positioning mode
+UENUM(BlueprintType)
+enum class ECameraPositionMode : uint8
+{
+	Center UMETA(DisplayName = "Center (World Origin)"),
+	Relative UMETA(DisplayName = "Relative (To Target)")
+};
+
+// Discovery configuration (persisted after successful discovery for reuse in mapping)
+USTRUCT(BlueprintType)
+struct FDiscoveryConfiguration
+{
+	GENERATED_BODY()
+	
+	// Target info
+	UPROPERTY()
+	AActor* TargetActor = nullptr;
+	
+	UPROPERTY()
+	bool bIsLandscape = false;
+	
+	UPROPERTY()
+	FBox TargetBounds;
+	
+	// Working trace settings (what succeeded in discovery)
+	UPROPERTY()
+	TEnumAsByte<ECollisionChannel> WorkingTraceChannel = ECC_WorldStatic;
+	
+	UPROPERTY()
+	bool bUseComplexCollision = true;
+	
+	UPROPERTY()
+	float MaxTraceRange = 100000.0f;
+	
+	// Orbit parameters
+	UPROPERTY()
+	float OrbitRadius = 0.0f;
+	
+	UPROPERTY()
+	FVector OrbitCenter = FVector::ZeroVector;
+	
+	UPROPERTY()
+	float ScanHeight = 0.0f;
+	
+	// First hit data
+	UPROPERTY()
+	FVector FirstHitLocation = FVector::ZeroVector;
+	
+	UPROPERTY()
+	float FirstHitAngle = 0.0f;
+	
+	UPROPERTY()
+	FVector CameraPositionAtHit = FVector::ZeroVector;
+	
+	UPROPERTY()
+	FRotator CameraRotationAtHit = FRotator::ZeroRotator;
+	
+	// Validation
+	bool IsValid() const
+	{
+		return TargetActor != nullptr && OrbitRadius > 0.0f;
+	}
+};
+
 /**
  * Main scanner camera actor
  * Orchestrates discovery and mapping using component-based architecture
@@ -46,10 +110,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Target")
 	AActor* TargetActor;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Target", meta = (ClampMin = "0", ClampMax = "100"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Camera Position")
+	ECameraPositionMode CameraPositionMode = ECameraPositionMode::Center;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Camera Position", 
+		meta = (ClampMin = "1", EditCondition = "CameraPositionMode == ECameraPositionMode::Center", EditConditionHides))
+	float CenterModeHeightMeters = 10.0f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Target", 
+		meta = (ClampMin = "0", ClampMax = "100", EditCondition = "CameraPositionMode == ECameraPositionMode::Relative", EditConditionHides))
 	float HeightPercent = 50.0f;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Target", meta = (ClampMin = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Target", 
+		meta = (ClampMin = "1", EditCondition = "CameraPositionMode == ECameraPositionMode::Relative", EditConditionHides))
 	float DistanceMeters = 100.0f;
 	
 	// ===== High-Level Control =====
@@ -65,6 +138,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Scanner")
 	void Stop();
+	
+	/**
+	 * Start mapping phase (uses persisted discovery configuration)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Scanner")
+	void StartMapping();
 	
 	/**
 	 * Clear discovery laser lines
@@ -122,6 +201,10 @@ private:
 	
 	EMappingScannerState CurrentState;
 	
+	// ===== Discovery Configuration (Persisted for Mapping) =====
+	
+	FDiscoveryConfiguration DiscoveryConfig;
+	
 	// ===== First Hit Data =====
 	
 	bool bHasFirstHit;
@@ -141,4 +224,5 @@ private:
 	// ===== Internal Methods =====
 	
 	void TransitionToState(EMappingScannerState NewState);
+	bool IsTargetLandscape() const;
 };

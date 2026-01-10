@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Scanner/Components/NKLaserTracerComponent.h"
+#include "Scanner/Utilities/NKScannerLogger.h"
 #include "DrawDebugHelpers.h"
 #include "CineCameraComponent.h"
 
@@ -35,7 +36,10 @@ bool UNKLaserTracerComponent::PerformTrace(FHitResult& OutHit)
 	
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(Owner);
+	QueryParams.bTraceComplex = bUseComplexCollision;
+	QueryParams.bReturnPhysicalMaterial = true;
 	
+	// Primary trace
 	bool bHit = GetWorld()->LineTraceSingleByChannel(
 		OutHit,
 		Start,
@@ -43,6 +47,57 @@ bool UNKLaserTracerComponent::PerformTrace(FHitResult& OutHit)
 		TraceChannel,
 		QueryParams
 	);
+	
+	// Log trace attempt
+	if (UNKScannerLogger* Logger = UNKScannerLogger::Get(this))
+	{
+		Logger->Log(
+			FString::Printf(
+				TEXT("Laser trace - Channel: %s, Complex: %s, Hit: %s, Distance: %.2fm"),
+				*UEnum::GetValueAsString(TEXT("Engine.ECollisionChannel"), TraceChannel),
+				bUseComplexCollision ? TEXT("YES") : TEXT("NO"),
+				bHit ? TEXT("YES") : TEXT("NO"),
+				bHit ? OutHit.Distance/100.0f : 0.0f
+			),
+			TEXT("LaserTracer")
+		);
+		
+		if (bHit)
+		{
+			Logger->Log(
+				FString::Printf(TEXT("  Hit Actor: %s"), 
+					OutHit.GetActor() ? *OutHit.GetActor()->GetName() : TEXT("NULL")),
+				TEXT("LaserTracer")
+			);
+		}
+	}
+	
+	// Fallback trace if enabled and primary missed
+	if (!bHit && bUseFallbackChannel)
+	{
+		bHit = GetWorld()->LineTraceSingleByChannel(
+			OutHit,
+			Start,
+			End,
+			FallbackTraceChannel,
+			QueryParams
+		);
+		
+		if (bHit)
+		{
+			if (UNKScannerLogger* Logger = UNKScannerLogger::Get(this))
+			{
+				Logger->LogWarning(
+					FString::Printf(
+						TEXT("Fallback channel %s succeeded! Distance: %.2fm"),
+						*UEnum::GetValueAsString(TEXT("Engine.ECollisionChannel"), FallbackTraceChannel),
+						OutHit.Distance/100.0f
+					),
+					TEXT("LaserTracer")
+				);
+			}
+		}
+	}
 	
 	// Update last shot state
 	bLastShotHit = bHit;

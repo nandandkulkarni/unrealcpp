@@ -12,7 +12,6 @@ UNKTargetFinderComponent::UNKTargetFinderComponent()
 	, FirstHitAngle(0.0f)
 	, TimeAccumulator(0.0f)
 	, TargetActor(nullptr)
-	, OrbitRadius(0.0f)
 	, ScanHeight(0.0f)
 	, LaserTracer(nullptr)
 	, CameraController(nullptr)
@@ -64,7 +63,7 @@ void UNKTargetFinderComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	}
 }
 
-void UNKTargetFinderComponent::StartDiscovery(AActor* Target, float InOrbitRadius, float InScanHeight)
+void UNKTargetFinderComponent::StartDiscovery(AActor* Target, float InScanHeight)
 {
 	if (!Target)
 	{
@@ -74,10 +73,9 @@ void UNKTargetFinderComponent::StartDiscovery(AActor* Target, float InOrbitRadiu
 	
 	// Store parameters
 	TargetActor = Target;
-	OrbitRadius = InOrbitRadius;
 	ScanHeight = InScanHeight;
 	
-	// Calculate orbit center
+	// Get target center for reference only
 	FBox TargetBounds = Target->GetComponentsBoundingBox(true);
 	FVector TargetCenter = TargetBounds.GetCenter();
 	OrbitCenter = FVector(TargetCenter.X, TargetCenter.Y, InScanHeight);
@@ -87,12 +85,17 @@ void UNKTargetFinderComponent::StartDiscovery(AActor* Target, float InOrbitRadiu
 	ShotCount = 0;
 	CurrentAngle = 0.0f;
 	bHasFoundTarget = false;
-	TimeAccumulator = 0.0f;  // Reset shot timer
+	TimeAccumulator = 0.0f;
 	
-	// Position camera at starting point
-	PositionCameraAtStart();
+	// Position camera at configured height (don't move XY, just set Z if needed)
+	if (CameraController)
+	{
+		FVector CurrentPos = CameraController->GetCameraPosition();
+		FVector NewPos = FVector(CurrentPos.X, CurrentPos.Y, InScanHeight);
+		CameraController->SetPosition(NewPos);
+	}
 	
-	UE_LOG(LogTemp, Warning, TEXT("UNKTargetFinderComponent: Discovery started"));
+	UE_LOG(LogTemp, Warning, TEXT("UNKTargetFinderComponent: Discovery started - Stationary rotation mode"));
 }
 
 void UNKTargetFinderComponent::StopDiscovery()
@@ -128,20 +131,46 @@ void UNKTargetFinderComponent::PerformDiscoveryShot()
 	
 	if (bHit)
 	{
-		// Found target!
-		bHasFoundTarget = true;
-		FirstHit = HitResult;
-		FirstHitAngle = CurrentAngle;
+		// Verify we hit the TARGET actor, not just any collision
+		AActor* HitActor = HitResult.GetActor();
+		bool bHitTarget = (HitActor == TargetActor);
 		
-		UE_LOG(LogTemp, Warning, TEXT("UNKTargetFinderComponent: ✅ TARGET FOUND at angle %.1f°"), CurrentAngle);
-		UE_LOG(LogTemp, Warning, TEXT("  Hit Actor: %s"), HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("NULL"));
-		UE_LOG(LogTemp, Warning, TEXT("  Broadcasting OnTargetFound event..."));
+		// Get actor label and mesh name for debugging
+		FString HitActorLabel = HitActor ? HitActor->GetActorLabel() : TEXT("NULL");
+		FString HitActorName = HitActor ? HitActor->GetName() : TEXT("NULL");
+		FString TargetActorLabel = TargetActor ? TargetActor->GetActorLabel() : TEXT("NULL");
 		
-		OnTargetFound.Broadcast(HitResult);
+		// Get mesh/component name if available
+		FString ComponentName = HitResult.Component.IsValid() ? HitResult.Component->GetName() : TEXT("NULL");
+		FString ComponentClass = HitResult.Component.IsValid() ? HitResult.Component->GetClass()->GetName() : TEXT("NULL");
 		
-		UE_LOG(LogTemp, Warning, TEXT("  Event broadcast complete, stopping discovery"));
-		StopDiscovery();
-		return;
+		if (!bHitTarget)
+		{
+			UE_LOG(LogTemp, Log, TEXT("  Hit WRONG actor at %.1f°:"), CurrentAngle);
+			UE_LOG(LogTemp, Log, TEXT("    Hit: '%s' (%s)"), *HitActorLabel, *HitActorName);
+			UE_LOG(LogTemp, Log, TEXT("    Component: %s (%s)"), *ComponentName, *ComponentClass);
+			UE_LOG(LogTemp, Log, TEXT("    Looking for: '%s'"), *TargetActorLabel);
+			UE_LOG(LogTemp, Log, TEXT("    Distance: %.2fm - continuing scan"), HitResult.Distance / 100.0f);
+		}
+		else
+		{
+			// Found target!
+			bHasFoundTarget = true;
+			FirstHit = HitResult;
+			FirstHitAngle = CurrentAngle;
+			
+			UE_LOG(LogTemp, Warning, TEXT("UNKTargetFinderComponent: ✅ TARGET FOUND at angle %.1f°"), CurrentAngle);
+			UE_LOG(LogTemp, Warning, TEXT("  Hit Actor: '%s' (%s)"), *HitActorLabel, *HitActorName);
+			UE_LOG(LogTemp, Warning, TEXT("  Component: %s (%s)"), *ComponentName, *ComponentClass);
+			UE_LOG(LogTemp, Warning, TEXT("  Distance: %.2fm"), HitResult.Distance / 100.0f);
+			UE_LOG(LogTemp, Warning, TEXT("  Broadcasting OnTargetFound event..."));
+			
+			OnTargetFound.Broadcast(HitResult);
+			
+			UE_LOG(LogTemp, Warning, TEXT("  Event broadcast complete, stopping discovery"));
+			StopDiscovery();
+			return;
+		}
 	}
 	
 	// Move to next angle
@@ -158,15 +187,13 @@ void UNKTargetFinderComponent::PerformDiscoveryShot()
 
 void UNKTargetFinderComponent::PositionCameraAtStart()
 {
-	if (!CameraController)
+	// Camera is already positioned - just set initial rotation to 0°
+	if (CameraController)
 	{
-		return;
+		FRotator InitialRotation(0.0f, 0.0f, 0.0f);
+		CameraController->SetRotation(InitialRotation);
+		UE_LOG(LogTemp, Warning, TEXT("UNKTargetFinderComponent: Camera ready at initial rotation (0°)"));
 	}
-	
-	// Position camera at angle 0° (South of target)
-	CameraController->MoveToOrbitPosition(0.0f, OrbitRadius, OrbitCenter, ScanHeight);
-	
-	UE_LOG(LogTemp, Warning, TEXT("UNKTargetFinderComponent: Camera positioned at start (South)"));
 }
 
 void UNKTargetFinderComponent::RotateCameraToAngle(float Angle)
@@ -176,20 +203,10 @@ void UNKTargetFinderComponent::RotateCameraToAngle(float Angle)
 		return;
 	}
 	
-	// Calculate direction to look based on angle
-	float AngleRadians = FMath::DegreesToRadians(Angle);
+	// Simple rotation: Just set camera yaw to the angle
+	// Camera stays in place, only rotates
+	FRotator NewRotation(0.0f, Angle, 0.0f);  // Pitch=0, Yaw=Angle, Roll=0
+	CameraController->SetRotation(NewRotation);
 	
-	// Calculate point on orbit circle to look at
-	FVector LookAtPoint;
-	LookAtPoint.X = OrbitCenter.X + (OrbitRadius * FMath::Cos(AngleRadians));
-	LookAtPoint.Y = OrbitCenter.Y + (OrbitRadius * FMath::Sin(AngleRadians));
-	LookAtPoint.Z = ScanHeight;
-	
-	// Calculate rotation from camera position to look-at point
-	FVector CameraPos = CameraController->GetCameraPosition();
-	FVector Direction = LookAtPoint - CameraPos;
-	Direction.Normalize();
-	
-	FRotator LookAtRotation = Direction.Rotation();
-	CameraController->SetRotation(LookAtRotation);
+	UE_LOG(LogTemp, Log, TEXT("Camera rotated to yaw: %.1f°"), Angle);
 }

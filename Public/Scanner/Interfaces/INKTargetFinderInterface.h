@@ -40,12 +40,11 @@ public:
 	// ===== Discovery Control =====
 	
 	/**
-	 * Start the discovery process
+	 * Start the discovery process - camera rotates in place 360°
 	 * @param Target - The actor to discover
-	 * @param OrbitRadius - Distance from target center to camera position
-	 * @param ScanHeight - Z-height at which to scan
+	 * @param ScanHeight - Z-height at which to position camera
 	 */
-	virtual void StartDiscovery(AActor* Target, float OrbitRadius, float ScanHeight) = 0;
+	virtual void StartDiscovery(AActor* Target, float ScanHeight) = 0;
 	
 	/**
 	 * Stop the discovery process

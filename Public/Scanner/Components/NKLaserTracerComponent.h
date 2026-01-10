@@ -45,22 +45,32 @@ public:
 	
 	// ===== Configuration =====
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Trace")
 	float MaxRange = 100000.0f;  // 1000m default
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser")
-	TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Trace")
+	TEnumAsByte<ECollisionChannel> TraceChannel = ECC_WorldStatic;  // Changed to WorldStatic for landscape support
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Trace")
+	bool bUseComplexCollision = true;  // Use complex collision for landscapes
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Trace")
+	bool bUseFallbackChannel = false;  // Try alternate channel if primary fails
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Trace", 
+		meta = (EditCondition = "bUseFallbackChannel"))
+	TEnumAsByte<ECollisionChannel> FallbackTraceChannel = ECC_Visibility;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Visualization")
 	bool bShowLaser = true;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Visualization")
 	FColor LaserColor = FColor::Red;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Visualization")
 	float LaserThickness = 2.0f;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Laser Visualization")
 	float VisualsLifetime = -1.0f;  // Infinite by default
 
 private:

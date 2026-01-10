@@ -30,7 +30,7 @@ protected:
 public:
 	// ===== INKTargetFinderInterface Implementation =====
 	
-	virtual void StartDiscovery(AActor* Target, float OrbitRadius, float ScanHeight) override;
+	virtual void StartDiscovery(AActor* Target, float ScanHeight) override;
 	virtual void StopDiscovery() override;
 	
 	virtual bool IsDiscovering() const override { return bIsDiscovering; }
@@ -76,7 +76,6 @@ private:
 	// Discovery parameters
 	UPROPERTY()
 	AActor* TargetActor;
-	float OrbitRadius;
 	FVector OrbitCenter;
 	float ScanHeight;
 	

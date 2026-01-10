@@ -113,9 +113,17 @@ void ANKMappingScannerHUD::DrawLeftSideInfo(float& YPos)
 		FVector CamPos = MappingCamera->GetFirstHitCameraPosition();
 		FRotator CamRot = MappingCamera->GetFirstHitCameraRotation();
 		
+		AActor* HitActor = Hit.GetActor();
+		FString HitActorLabel = HitActor ? HitActor->GetActorLabel() : TEXT("None");
+		FString HitActorName = HitActor ? HitActor->GetName() : TEXT("None");
+		FString ComponentName = Hit.Component.IsValid() ? Hit.Component->GetName() : TEXT("None");
+		FString ComponentClass = Hit.Component.IsValid() ? Hit.Component->GetClass()->GetName() : TEXT("None");
+		
 		DrawLine(TEXT("FIRST HIT DETAILS:"), YPos, HUDColors::Success);
-		DrawLine(FString::Printf(TEXT("• Hit Actor: %s"), 
-			Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("None")), YPos);
+		DrawLine(FString::Printf(TEXT("• Hit Actor: '%s'"), *HitActorLabel), YPos);
+		DrawLine(FString::Printf(TEXT("  (%s)"), *HitActorName), YPos, HUDColors::SubText);
+		DrawLine(FString::Printf(TEXT("• Component: %s"), *ComponentName), YPos);
+		DrawLine(FString::Printf(TEXT("  (%s)"), *ComponentClass), YPos, HUDColors::SubText);
 		DrawLine(FString::Printf(TEXT("• Hit Angle: %.1f°"), Angle), YPos);
 		DrawLine(FString::Printf(TEXT("• Hit Distance: %.1f cm (%.2f m)"), 
 			Hit.Distance, Hit.Distance / 100.0f), YPos);
@@ -139,8 +147,12 @@ void ANKMappingScannerHUD::DrawLeftSideInfo(float& YPos)
 	// ===== TARGET INFO =====
 	if (MappingCamera->TargetActor)
 	{
+		FString TargetLabel = MappingCamera->TargetActor->GetActorLabel();
+		FString TargetName = MappingCamera->TargetActor->GetName();
+		
 		DrawLine(TEXT("TARGET:"), YPos, HUDColors::Header);
-		DrawLine(FString::Printf(TEXT("• Name: %s"), *MappingCamera->TargetActor->GetName()), YPos);
+		DrawLine(FString::Printf(TEXT("• Name: '%s'"), *TargetLabel), YPos);
+		DrawLine(FString::Printf(TEXT("  (%s)"), *TargetName), YPos, HUDColors::SubText);
 		
 		FBox Bounds = MappingCamera->TargetActor->GetComponentsBoundingBox(true);
 		FVector Size = Bounds.GetSize();
@@ -306,9 +318,16 @@ void ANKMappingScannerHUD::NotifyHitBoxClick(FName BoxName)
 	
 	if (BoxName == "StartDiscoveryButton")
 	{
-		if (MappingCamera->IsDiscovering())
+		EMappingScannerState State = MappingCamera->GetScannerState();
+		
+		if (State == EMappingScannerState::Discovering)
 		{
 			MappingCamera->Stop();
+		}
+		else if (State == EMappingScannerState::Discovered)
+		{
+			// ✅ User clicks "Start Mapping" after successful discovery
+			MappingCamera->StartMapping();  // Uses persisted config!
 		}
 		else
 		{
