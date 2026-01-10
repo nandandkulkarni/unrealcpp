@@ -1,0 +1,15 @@
+void ANKMappingScannerHUD::ToggleMode()
+{
+	bScanningMode = !bScanningMode;
+	
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC) return;
+	
+	// Update mouse cursor visibility
+	PC->bShowMouseCursor = bScanningMode;
+	PC->bEnableClickEvents = bScanningMode;
+	PC->bEnableMouseOverEvents = bScanningMode;
+	
+	UE_LOG(LogTemp, Warning, TEXT("Mode switched to: %s"), 
+		bScanningMode ? TEXT("Scanning Mode") : TEXT("Control Mode"));
+}

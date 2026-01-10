@@ -6,8 +6,6 @@
 #include "GameFramework/GameModeBase.h"
 #include "TPCPPGameMode.generated.h"
 
-class ANKScannerHUD;
-
 /**
  *  Simple GameMode for a third person game
  */
@@ -21,6 +19,7 @@ public:
 	/** Constructor */
 	ATPCPPGameMode();
 };
+
 
 
 
