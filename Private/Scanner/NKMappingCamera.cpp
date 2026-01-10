@@ -65,6 +65,8 @@ void ANKMappingCamera::StartDiscovery()
 	FBox TargetBounds = TargetActor->GetComponentsBoundingBox(true);
 	FVector TargetCenter = TargetBounds.GetCenter();
 	FVector TargetExtent = TargetBounds.GetExtent();
+	FVector TargetMin = TargetBounds.Min;
+	FVector TargetMax = TargetBounds.Max;
 	
 	// Calculate scan height
 	float TargetHeightAtPercent = TargetBounds.Min.Z + 
@@ -75,10 +77,59 @@ void ANKMappingCamera::StartDiscovery()
 	float ClearanceCm = DistanceMeters * 100.0f;
 	float OrbitRadius = MaxHorizontalExtent + ClearanceCm;
 	
-	UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera: Starting discovery"));
-	UE_LOG(LogTemp, Warning, TEXT("  Target: %s"), *TargetActor->GetName());
-	UE_LOG(LogTemp, Warning, TEXT("  Orbit Radius: %.2f m"), OrbitRadius / 100.0f);
-	UE_LOG(LogTemp, Warning, TEXT("  Scan Height: %.2f m"), TargetHeightAtPercent / 100.0f);
+	// Get camera position
+	FVector CameraPosition = GetActorLocation();
+	
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera: Starting Discovery"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	
+	// Log target info
+	UE_LOG(LogTemp, Warning, TEXT("TARGET ACTOR:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Name: %s"), *TargetActor->GetName());
+	
+	// Log bounding box details
+	UE_LOG(LogTemp, Warning, TEXT("BOUNDING BOX:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Min: X=%.2f Y=%.2f Z=%.2f (%.2fm, %.2fm, %.2fm)"), 
+		TargetMin.X, TargetMin.Y, TargetMin.Z,
+		TargetMin.X/100.0f, TargetMin.Y/100.0f, TargetMin.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Max: X=%.2f Y=%.2f Z=%.2f (%.2fm, %.2fm, %.2fm)"), 
+		TargetMax.X, TargetMax.Y, TargetMax.Z,
+		TargetMax.X/100.0f, TargetMax.Y/100.0f, TargetMax.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Center: X=%.2f Y=%.2f Z=%.2f (%.2fm, %.2fm, %.2fm)"), 
+		TargetCenter.X, TargetCenter.Y, TargetCenter.Z,
+		TargetCenter.X/100.0f, TargetCenter.Y/100.0f, TargetCenter.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Extent: X=%.2f Y=%.2f Z=%.2f (%.2fm, %.2fm, %.2fm)"), 
+		TargetExtent.X, TargetExtent.Y, TargetExtent.Z,
+		TargetExtent.X/100.0f, TargetExtent.Y/100.0f, TargetExtent.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Size: %.2fm × %.2fm × %.2fm"), 
+		(TargetMax.X - TargetMin.X)/100.0f, 
+		(TargetMax.Y - TargetMin.Y)/100.0f, 
+		(TargetMax.Z - TargetMin.Z)/100.0f);
+	
+	// Log camera position
+	UE_LOG(LogTemp, Warning, TEXT("CAMERA POSITION:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Current: X=%.2f Y=%.2f Z=%.2f (%.2fm, %.2fm, %.2fm)"), 
+		CameraPosition.X, CameraPosition.Y, CameraPosition.Z,
+		CameraPosition.X/100.0f, CameraPosition.Y/100.0f, CameraPosition.Z/100.0f);
+	
+	// Log shooting parameters
+	UE_LOG(LogTemp, Warning, TEXT("SHOOTING PARAMETERS:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Orbit Radius: %.2f cm (%.2f m)"), OrbitRadius, OrbitRadius/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Max Shooting Distance: %.2f cm (%.2f m)"), 
+		LaserTracerComponent ? LaserTracerComponent->MaxRange : 0.0f,
+		LaserTracerComponent ? LaserTracerComponent->MaxRange/100.0f : 0.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Scan Height: %.2f cm (%.2f m)"), TargetHeightAtPercent, TargetHeightAtPercent/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Height Percent: %.1f%%"), HeightPercent);
+	UE_LOG(LogTemp, Warning, TEXT("  Distance from Target Center: %.2f m"), DistanceMeters);
+	UE_LOG(LogTemp, Warning, TEXT("  Angular Step: %.1f°"), TargetFinderComponent ? TargetFinderComponent->AngularStepDegrees : 30.0f);
+	
+	// Calculate and log distance between camera and target center
+	float DistanceToTarget = FVector::Dist(CameraPosition, TargetCenter);
+	UE_LOG(LogTemp, Warning, TEXT("  Current Camera-to-Target Distance: %.2f cm (%.2f m)"), 
+		DistanceToTarget, DistanceToTarget/100.0f);
+	
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
 	
 	// Start discovery
 	TargetFinderComponent->StartDiscovery(TargetActor, OrbitRadius, TargetHeightAtPercent);
