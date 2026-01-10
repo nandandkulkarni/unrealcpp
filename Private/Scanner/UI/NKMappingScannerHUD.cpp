@@ -2,6 +2,7 @@
 
 #include "Scanner/UI/NKMappingScannerHUD.h"
 #include "Scanner/NKMappingCamera.h"
+#include "Scanner/Utilities/NKScannerLogger.h"
 #include "Engine/Canvas.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -159,6 +160,48 @@ void ANKMappingScannerHUD::DrawLeftSideInfo(float& YPos)
 	FRotator CamRot = MappingCamera->GetActorRotation();
 	DrawLine(FString::Printf(TEXT("• Rot: P=%.1f° Y=%.1f° R=%.1f°"), 
 		CamRot.Pitch, CamRot.Yaw, CamRot.Roll), YPos);
+	
+	// ===== LOGGING INFO =====
+	if (UNKScannerLogger* Logger = UNKScannerLogger::Get(GetWorld()))
+	{
+		YPos += LineHeight * 0.5f;
+		DrawLine(TEXT("LOGGING:"), YPos, HUDColors::Header);
+		
+		// Logging status
+		FString LogStatus = Logger->bEnableLogging ? TEXT("Enabled") : TEXT("Disabled");
+		FLinearColor StatusColor = Logger->bEnableLogging ? HUDColors::Success : HUDColors::SubText;
+		DrawLine(FString::Printf(TEXT("• Status: %s"), *LogStatus), YPos, StatusColor);
+		
+		// File logging status and path
+		if (Logger->bEnableLogging && Logger->bLogToFile)
+		{
+			DrawLine(TEXT("• File Logging: Enabled"), YPos, HUDColors::Success);
+			
+			// Get the full resolved path
+			FString ResolvedLogPath = Logger->GetResolvedLogFilePath();
+			
+			// Split path if too long for display
+			if (ResolvedLogPath.Len() > 80)
+			{
+				DrawLine(TEXT("• Log File:"), YPos, HUDColors::Info);
+				
+				// Extract filename
+				FString FileName = FPaths::GetCleanFilename(ResolvedLogPath);
+				FString Directory = FPaths::GetPath(ResolvedLogPath);
+				
+				DrawLine(FString::Printf(TEXT("  %s"), *FileName), YPos, HUDColors::SubText);
+				DrawLine(FString::Printf(TEXT("  in: %s"), *Directory), YPos, HUDColors::SubText);
+			}
+			else
+			{
+				DrawLine(FString::Printf(TEXT("• Log File: %s"), *ResolvedLogPath), YPos, HUDColors::Info);
+			}
+		}
+		else if (Logger->bEnableLogging)
+		{
+			DrawLine(TEXT("• File Logging: Disabled (Output window only)"), YPos, HUDColors::SubText);
+		}
+	}
 }
 
 void ANKMappingScannerHUD::DrawRightSideButtons()
