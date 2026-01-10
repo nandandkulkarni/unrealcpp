@@ -589,9 +589,16 @@ void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float He
 	
 	FBox TargetBounds = TargetLandscape->GetComponentsBoundingBox(true);
 	FVector TargetCenter = TargetBounds.GetCenter();
+	FVector TargetExtent = TargetBounds.GetExtent();
+	FVector TargetSize = TargetBounds.GetSize();
 	
-	LogMessage(FString::Printf(TEXT("STEP 2: Target bounds - Center: %s, Extent: %s"), 
-		*TargetCenter.ToString(), *TargetBounds.GetExtent().ToString()), true);
+	LogMessage(FString::Printf(TEXT("STEP 2: Bounding Box Analysis:")), true);
+	LogMessage(FString::Printf(TEXT("  Center: %s"), *TargetCenter.ToString()), true);
+	LogMessage(FString::Printf(TEXT("  Extent: %s (half-size)"), *TargetExtent.ToString()), true);
+	LogMessage(FString::Printf(TEXT("  Size: %.2fm x %.2fm x %.2fm"), 
+		TargetSize.X / 100.0f, TargetSize.Y / 100.0f, TargetSize.Z / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("  Min: %s"), *TargetBounds.Min.ToString()), true);
+	LogMessage(FString::Printf(TEXT("  Max: %s"), *TargetBounds.Max.ToString()), true);
 	
 	// ===== IMPORTANT: Calculate the height at the specified percentage =====
 	float TargetHeightAtPercent = TargetBounds.Min.Z + 
@@ -600,20 +607,27 @@ void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float He
 	LogMessage(FString::Printf(TEXT("STEP 2: Scan height at %.0f%% = %.2f cm (%.2f m)"), 
 		HeightPercent, TargetHeightAtPercent, TargetHeightAtPercent / 100.0f), true);
 	
-	// ===== NEW: Spiral search pattern =====
-	// Start at center and move outward in -Y direction until we find a safe distance
-	// This works for ANY object size without relying on bounding box accuracy
+	// ===== IMPROVED: Start 100m from FARTHEST BOUNDARY, not from center =====
+	// Get the largest horizontal extent (X or Y dimension)
+	float MaxHorizontalExtent = FMath::Max(TargetExtent.X, TargetExtent.Y);
+	
+	// Clearance distance from the farthest edge
+	float ClearanceMeters = 100.0f;
+	float ClearanceCm = ClearanceMeters * 100.0f;
+	
+	// Calculate starting distance: from center to farthest edge + clearance
+	float SearchDistance = MaxHorizontalExtent + ClearanceCm;
+	float DistanceIncrement = 10000.0f;  // Move outward by 100m each attempt if needed
 	
 	CinematicOrbitHeight = TargetHeightAtPercent;
 	CinematicOrbitCenter = FVector(TargetCenter.X, TargetCenter.Y, TargetHeightAtPercent);
 	CinematicLookAtTarget = FVector(TargetCenter.X, TargetCenter.Y, TargetHeightAtPercent);
 	
-	// Start with user-requested distance, minimum 100m
-	float SearchDistance = FMath::Max(DistanceMeters * 100.0f, 10000.0f);  // At least 100m
-	float DistanceIncrement = 10000.0f;  // Move outward by 100m each attempt
-	
-	LogMessage(FString::Printf(TEXT("STEP 2: Starting spiral search at %.2f m, incrementing by %.2f m"), 
-		SearchDistance / 100.0f, DistanceIncrement / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("STEP 2: Position Calculation:")), true);
+	LogMessage(FString::Printf(TEXT("  Max horizontal extent: %.2f m"), MaxHorizontalExtent / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("  Clearance from edge: %.2f m"), ClearanceMeters), true);
+	LogMessage(FString::Printf(TEXT("  Starting distance from center: %.2f m"), SearchDistance / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("  Distance from farthest edge: %.2f m"), ClearanceCm / 100.0f), true);
 	
 	// Position camera at search distance in -Y direction (South)
 	FVector MappingPosition = CinematicOrbitCenter;
@@ -622,8 +636,13 @@ void ANKScannerCameraActor::StartCinematicScan(AActor* TargetLandscape, float He
 	SetActorLocation(MappingPosition);
 	CinematicOrbitRadius = SearchDistance;
 	
-	LogMessage(FString::Printf(TEXT("STEP 2 SUCCESS: Camera positioned at %.2f cm (%.2f m) from target center at height %.2f cm"), 
-		SearchDistance, SearchDistance / 100.0f, TargetHeightAtPercent), true);
+	LogMessage(FString::Printf(TEXT("STEP 2 SUCCESS: Camera positioned for scanning")), true);
+	LogMessage(FString::Printf(TEXT("  Starting Position: X=%.2f, Y=%.2f, Z=%.2f"), 
+		MappingPosition.X, MappingPosition.Y, MappingPosition.Z), true);
+	LogMessage(FString::Printf(TEXT("  Starting Position (meters): X=%.2fm, Y=%.2fm, Z=%.2fm"), 
+		MappingPosition.X / 100.0f, MappingPosition.Y / 100.0f, MappingPosition.Z / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("  Orbit radius: %.2f m"), SearchDistance / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("  Orbit height: %.2f m"), TargetHeightAtPercent / 100.0f), true);
 	
 	// Ensure laser range is sufficient
 	float DistanceToTarget = FVector::Dist(MappingPosition, CinematicLookAtTarget);

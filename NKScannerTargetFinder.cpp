@@ -118,69 +118,44 @@ void ANKScannerCameraActor::OnTargetFinderSuccess()
 
 void ANKScannerCameraActor::OnTargetFinderFailure()
 {
-	LogMessage(FString::Printf(TEXT("STEP 3: No hit at distance %.2f m (after %d attempts in 360° rotation)"), 
-		CinematicOrbitRadius / 100.0f, ValidationAttempts), true);
+	LogMessage(FString::Printf(TEXT("STEP 3 FAILED: No hit found after 360° rotation at distance %.2f m"), 
+		CinematicOrbitRadius / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("  Completed %d laser trace attempts"), ValidationAttempts), true);
 	
 	// Log camera state for debugging
-	LogMessage(FString::Printf(TEXT("STEP 3 DEBUG: Camera at %s, LookingAt %s, LaserRange %.2f m"),
-		*GetActorLocation().ToString(),
-		*CinematicLookAtTarget.ToString(),
-		LaserMaxRange / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("STEP 3 DEBUG: Camera at %s"), *GetActorLocation().ToString()), true);
+	LogMessage(FString::Printf(TEXT("STEP 3 DEBUG: Looking at %s"), *CinematicLookAtTarget.ToString()), true);
+	LogMessage(FString::Printf(TEXT("STEP 3 DEBUG: Laser range %.2f m"), LaserMaxRange / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("STEP 3 DEBUG: Orbit radius %.2f m"), CinematicOrbitRadius / 100.0f), true);
 	
-	// ===== SPIRAL SEARCH: Move outward and try again =====
-	const float MaxSearchDistance = 500000.0f;  // 5000m max (5km)
-	const float DistanceIncrement = 10000.0f;   // 100m per step
+	// Provide diagnostic information
+	LogMessage(TEXT("========================================"), true);
+	LogMessage(TEXT("TERRAIN MAPPING ABORTED - No target found!"), true);
+	LogMessage(TEXT("Possible issues:"), true);
+	LogMessage(TEXT("  1. Target has no collision geometry"), true);
+	LogMessage(TEXT("     - Check if target has collision enabled"), true);
+	LogMessage(TEXT("     - Verify collision complexity is not 'No Collision'"), true);
+	LogMessage(TEXT("  2. Wrong laser trace channel"), true);
+	LogMessage(TEXT("     - Current channel: LaserTraceChannel"), true);
+	LogMessage(TEXT("     - Try changing to ECC_WorldStatic or ECC_Visibility"), true);
+	LogMessage(TEXT("  3. Laser range insufficient"), true);
+	LogMessage(FString::Printf(TEXT("     - Current range: %.2f m"), LaserMaxRange / 100.0f), true);
+	LogMessage(FString::Printf(TEXT("     - Distance to target: %.2f m"), CinematicOrbitRadius / 100.0f), true);
+	LogMessage(TEXT("  4. Target is at wrong height"), true);
+	LogMessage(FString::Printf(TEXT("     - Scan height: %.2f m (%.0f%%)"), 
+		CinematicOrbitHeight / 100.0f, CinematicHeightPercent), true);
+	LogMessage(TEXT("     - Try adjusting CinematicHeightPercent"), true);
+	LogMessage(TEXT("========================================"), true);
 	
-	CinematicOrbitRadius += DistanceIncrement;
-	
-	if (CinematicOrbitRadius > MaxSearchDistance)
+	// Play failure sound
+	if (bEnableAudioFeedback && ValidationFailedSound)
 	{
-		// Exhausted search area - abort
-		LogMessage(FString::Printf(TEXT("STEP 3 FAILED: Target not found after searching up to %.2f m"), 
-			MaxSearchDistance / 100.0f), true);
-		LogMessage(TEXT("  Possible issues:"), true);
-		LogMessage(TEXT("  - Target has no collision geometry"), true);
-		LogMessage(TEXT("  - Wrong laser trace channel (check LaserTraceChannel)"), true);
-		LogMessage(TEXT("  - Target is beyond 5km search radius"), true);
-		LogMessage(FString::Printf(TEXT("  - Camera forward vector: %s"), 
-			*GetCineCameraComponent()->GetForwardVector().ToString()), true);
-		LogMessage(TEXT("TERRAIN MAPPING ABORTED - Cannot map unreachable target!"), true);
-		
-		// Play failure sound
-		if (bEnableAudioFeedback && ValidationFailedSound)
-		{
-			PlayScannerSound(ValidationFailedSound);
-		}
-		
-		// Exit to idle
-		bIsValidating = false;
-		ScannerState = EScannerState::Idle;
-		return;
+		PlayScannerSound(ValidationFailedSound);
 	}
 	
-	// Continue search at new distance
-	LogMessage(FString::Printf(TEXT("STEP 3: Moving outward to %.2f m and retrying..."), 
-		CinematicOrbitRadius / 100.0f), true);
+	// Exit to idle state
+	bIsValidating = false;
+	ScannerState = EScannerState::Idle;
 	
-	// Reset validation for new distance
-	CurrentValidationAngle = 0.0f;
-	ValidationAttempts = 0;
-	
-	// Update camera position to new radius
-	FVector NewPosition = CinematicOrbitCenter;
-	NewPosition.Y -= CinematicOrbitRadius;  // Move south
-	SetActorLocation(NewPosition);
-	
-	LogMessage(FString::Printf(TEXT("STEP 3: New camera position: %s"), *NewPosition.ToString()), true);
-	
-	// Ensure laser range is sufficient for new distance
-	float DistanceToTarget = CinematicOrbitRadius;
-	if (DistanceToTarget > LaserMaxRange)
-	{
-		LaserMaxRange = DistanceToTarget * 2.0f;
-		LogMessage(FString::Printf(TEXT("STEP 3: Auto-adjusted laser range to %.2f m"), 
-			LaserMaxRange / 100.0f), true);
-	}
-	
-	// Continue validating (don't exit) - next Tick will test new distance
+	LogMessage(TEXT("OnTargetFinderFailure: Returned to Idle state"), true);
 }

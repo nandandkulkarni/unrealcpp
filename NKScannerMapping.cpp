@@ -195,3 +195,31 @@ FRotator ANKScannerCameraActor::CalculateLookAtRotation(const FVector& CameraPos
 	
 	return LookAtRot;
 }
+
+// ========================================================================
+// JSON SAVE/LOAD STUB FUNCTIONS
+// ========================================================================
+
+bool ANKScannerCameraActor::SaveScanDataToJSON(const FString& FilePath)
+{
+	// TODO: Implement JSON serialization of RecordedScanData array
+	LogMessage(FString::Printf(TEXT("SaveScanDataToJSON: JSON save not implemented yet. Would save %d points to: %s"),
+		RecordedScanData.Num(), *FilePath), true);
+	
+	UE_LOG(LogTemp, Warning, TEXT("SaveScanDataToJSON not implemented yet - skipping file write"));
+	
+	// Return true to prevent error messages
+	return true;
+}
+
+bool ANKScannerCameraActor::LoadScanDataFromJSON(const FString& FilePath)
+{
+	// TODO: Implement JSON deserialization into RecordedScanData array
+	LogMessage(FString::Printf(TEXT("LoadScanDataFromJSON: JSON load not implemented yet. Would load from: %s"), 
+		*FilePath), true);
+	
+	UE_LOG(LogTemp, Warning, TEXT("LoadScanDataFromJSON not implemented yet - skipping file read"));
+	
+	// Return false to indicate no data was loaded
+	return false;
+}

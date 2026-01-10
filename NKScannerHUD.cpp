@@ -89,6 +89,14 @@ void ANKScannerHUD::DrawHUD()
 			return;  // No scanner found, skip drawing
 		}
 	}
+	
+	// SAFETY: Validate scanner camera still exists
+	if (!IsValid(ScannerCamera))
+	{
+		UE_LOG(LogTemp, Error, TEXT("NKScannerHUD: Scanner camera became invalid!"));
+		ScannerCamera = nullptr;
+		return;
+	}
 
 	// Check if HUD should be shown
 	if (!ScannerCamera->bShowDebugHUD)
@@ -200,7 +208,7 @@ void ANKScannerHUD::DrawHUD()
 	DrawSectionHeader(TEXT("=== SCANNER STATUS ==="), YPos);
 	YPos += LineHeight * 0.5f;
 	
-	// ===== INPUT MODE INDICATOR =====
+	// ===== INPUT MODE INDICATOR (TOP) =====
 	APlayerController* PC = GetOwningPlayerController();
 	if (PC)
 	{
@@ -219,25 +227,12 @@ void ANKScannerHUD::DrawHUD()
 		}
 		
 		DrawStatusLine(ModeText, YPos, ModeColor);
-		YPos += LineHeight * 0.5f;  // Extra space after mode indicator
+		YPos += LineHeight * 0.8f;  // Extra space after mode indicator
 	}
 	
-	// ===== CAMERA POSITION =====
-	FVector CamPos = ScannerCamera->GetCameraPosition();
-	DrawSectionHeader(TEXT("CAMERA:"), YPos);
-	DrawStatusLine(FString::Printf(TEXT("Pos: X=%.1f Y=%.1f Z=%.1f"), 
-		CamPos.X, CamPos.Y, CamPos.Z), YPos, FLinearColor(0.8f, 0.8f, 1.0f));
-	DrawStatusLine(FString::Printf(TEXT("     (%.2fm, %.2fm, %.2fm)"), 
-		CamPos.X/100.0f, CamPos.Y/100.0f, CamPos.Z/100.0f), YPos, FLinearColor(0.6f, 0.6f, 0.8f));
+	// ===== SCANNER STATE & PROGRESS =====
+	DrawSectionHeader(TEXT("SCANNER:"), YPos);
 	
-	// Current rotation
-	FRotator CamRot = ScannerCamera->GetCameraRotation();
-	DrawStatusLine(FString::Printf(TEXT("Rot: P=%.1f° Y=%.1f° R=%.1f°"), 
-		CamRot.Pitch, CamRot.Yaw, CamRot.Roll), YPos, FLinearColor(1.0f, 0.9f, 0.7f));
-	
-	YPos += LineHeight * 0.3f;
-
-	// ===== SCANNER STATE =====
 	FString StateStr;
 	switch (ScannerCamera->GetScannerState())
 	{
@@ -261,19 +256,65 @@ void ANKScannerHUD::DrawHUD()
 	DrawStatusLine(FString::Printf(TEXT("Enabled: %s | Progress: %.1f%%"), 
 		ScannerCamera->IsScannerEnabled() ? TEXT("YES") : TEXT("NO"),
 		ScannerCamera->GetScanProgress() * 100.0f), YPos);
-
-	YPos += LineHeight * 0.3f;
-
-	// ===== TARGET FINDER =====
+	
+	// Show target finder info if validating
 	if (ScannerCamera->IsValidating())
 	{
-		DrawSectionHeader(TEXT("TARGET FINDER:"), YPos);
-		DrawStatusLine(FString::Printf(TEXT("Attempts: %d | Angle: %.1f°"), 
+		DrawStatusLine(FString::Printf(TEXT("Discovery: Attempt %d | Angle %.1f°"), 
 			ScannerCamera->GetValidationAttempts(),
 			ScannerCamera->GetCurrentValidationAngle()), YPos, FLinearColor::Yellow);
-		DrawStatusLine(TEXT("Status: Searching..."), YPos, FLinearColor::Yellow);
-		YPos += LineHeight * 0.3f;
 	}
+
+	YPos += LineHeight * 0.5f;
+	
+	// ===== TARGET INFO (with bounding box details) =====
+	AActor* TargetActor = ScannerCamera->GetCinematicTargetLandscape();
+	if (TargetActor)
+	{
+		DrawSectionHeader(TEXT("TARGET:"), YPos);
+		
+		// Display target label
+		FString TargetLabel = TargetActor->GetActorLabel();
+		DrawStatusLine(FString::Printf(TEXT("Name: %s"), *TargetLabel), YPos, FLinearColor(1.0f, 1.0f, 0.5f));
+		
+		// Get target bounds to show detailed info
+		FBox TargetBounds = TargetActor->GetComponentsBoundingBox(true);
+		FVector TargetSize = TargetBounds.GetSize();
+		
+		// Show bounding box size
+		DrawStatusLine(FString::Printf(TEXT("Size: %.1fm x %.1fm x %.1fm"), 
+			TargetSize.X / 100.0f, TargetSize.Y / 100.0f, TargetSize.Z / 100.0f), 
+			YPos, FLinearColor(0.7f, 0.9f, 1.0f));
+		
+		// Show Z height range
+		float MinHeightMeters = TargetBounds.Min.Z / 100.0f;
+		float MaxHeightMeters = TargetBounds.Max.Z / 100.0f;
+		DrawStatusLine(FString::Printf(TEXT("Z Range: %.2fm to %.2fm"), MinHeightMeters, MaxHeightMeters), 
+			YPos, FLinearColor(0.7f, 0.9f, 1.0f));
+		
+		// Show the scan height
+		float ScanHeightMeters = ScannerCamera->GetCinematicOrbitHeight() / 100.0f;
+		DrawStatusLine(FString::Printf(TEXT("Scan Height: %.2fm (%.0f%%)"), 
+			ScanHeightMeters, ScannerCamera->GetCinematicHeightPercent()), 
+			YPos, FLinearColor(0.5f, 1.0f, 0.5f));
+		
+		YPos += LineHeight * 0.5f;
+	}
+	
+	// ===== CAMERA POSITION =====
+	FVector CamPos = ScannerCamera->GetCameraPosition();
+	DrawSectionHeader(TEXT("CAMERA:"), YPos);
+	DrawStatusLine(FString::Printf(TEXT("Pos: X=%.1f Y=%.1f Z=%.1f"), 
+		CamPos.X, CamPos.Y, CamPos.Z), YPos, FLinearColor(0.8f, 0.8f, 1.0f));
+	DrawStatusLine(FString::Printf(TEXT("     (%.2fm, %.2fm, %.2fm)"), 
+		CamPos.X/100.0f, CamPos.Y/100.0f, CamPos.Z/100.0f), YPos, FLinearColor(0.6f, 0.6f, 0.8f));
+	
+	// Current rotation
+	FRotator CamRot = ScannerCamera->GetCameraRotation();
+	DrawStatusLine(FString::Printf(TEXT("Rot: P=%.1f° Y=%.1f° R=%.1f°"), 
+		CamRot.Pitch, CamRot.Yaw, CamRot.Roll), YPos, FLinearColor(1.0f, 0.9f, 0.7f));
+	
+	YPos += LineHeight * 0.5f;
 
 	// ===== LASER INFO =====
 	DrawSectionHeader(TEXT("LASER:"), YPos);
@@ -282,8 +323,9 @@ void ANKScannerHUD::DrawHUD()
 		FString HitActorName = ScannerCamera->GetLastHitActor() ? 
 			ScannerCamera->GetLastHitActor()->GetName() : TEXT("Unknown");
 		
-		DrawStatusLine(FString::Printf(TEXT("Hit: %s (%.0f cm)"), 
-			*HitActorName, ScannerCamera->GetLastHitDistance()), YPos, FLinearColor::Green);
+		DrawStatusLine(FString::Printf(TEXT("Hit: %s (%.0fcm / %.1fm)"), 
+			*HitActorName, ScannerCamera->GetLastHitDistance(), 
+			ScannerCamera->GetLastHitDistance() / 100.0f), YPos, FLinearColor::Green);
 		
 		FVector HitLoc = ScannerCamera->GetLastHitLocation();
 		DrawStatusLine(FString::Printf(TEXT("Loc: X=%.0f Y=%.0f Z=%.0f"), 
@@ -293,36 +335,22 @@ void ANKScannerHUD::DrawHUD()
 	{
 		DrawStatusLine(TEXT("Hit: NONE"), YPos, FLinearColor::Red);
 	}
-	DrawStatusLine(FString::Printf(TEXT("Range: %.0f cm"), 
-		ScannerCamera->GetLaserMaxRange()), YPos);
+	DrawStatusLine(FString::Printf(TEXT("Range: %.0fcm (%.1fm)"), 
+		ScannerCamera->GetLaserMaxRange(), ScannerCamera->GetLaserMaxRange() / 100.0f), YPos);
 
-	YPos += LineHeight * 0.3f;
+	YPos += LineHeight * 0.5f;
 	
-	// ===== TARGET INFO =====
-	AActor* TargetActor = ScannerCamera->GetCinematicTargetLandscape();
-	if (TargetActor)
+	// ===== SCAN DATA =====
+	if (ScannerCamera->IsCinematicScanActive() || ScannerCamera->GetRecordedDataCount() > 0)
 	{
-		DrawSectionHeader(TEXT("TARGET:"), YPos);
+		DrawSectionHeader(TEXT("SCAN DATA:"), YPos);
+		DrawStatusLine(FString::Printf(TEXT("Orbit: %.1f° | Points: %d"), 
+			ScannerCamera->GetCurrentOrbitAngle(),
+			ScannerCamera->GetRecordedDataCount()), YPos, FLinearColor(0.0f, 1.0f, 1.0f));
+		DrawStatusLine(FString::Printf(TEXT("Time: %.1fs"), 
+			ScannerCamera->GetCinematicScanElapsedTime()), YPos);
 		
-		// Display target label (the name shown in the outliner, like "MyCube")
-		FString TargetLabel = TargetActor->GetActorLabel();
-		DrawStatusLine(FString::Printf(TEXT("Name: %s"), *TargetLabel), YPos, FLinearColor(1.0f, 1.0f, 0.5f));
-		
-		// Get target bounds to show Z height range
-		FBox TargetBounds = TargetActor->GetComponentsBoundingBox(true);
-		float MinHeightMeters = TargetBounds.Min.Z / 100.0f;
-		float MaxHeightMeters = TargetBounds.Max.Z / 100.0f;
-		
-		DrawStatusLine(FString::Printf(TEXT("Z Range: %.2fm to %.2fm"), MinHeightMeters, MaxHeightMeters), 
-			YPos, FLinearColor(0.7f, 0.9f, 1.0f));
-		
-		// Show the scan height (what percentage we're scanning at)
-		float ScanHeightMeters = ScannerCamera->GetCinematicOrbitHeight() / 100.0f;
-		DrawStatusLine(FString::Printf(TEXT("Scan Height: %.2fm (%.0f%%)"), 
-			ScanHeightMeters, ScannerCamera->GetCinematicHeightPercent()), 
-			YPos, FLinearColor(0.5f, 1.0f, 0.5f));
-		
-		YPos += LineHeight * 0.3f;
+		YPos += LineHeight * 0.5f;
 	}
 
 	// ===== AUDIO STATUS =====
@@ -348,22 +376,9 @@ void ANKScannerHUD::DrawHUD()
 	}
 	DrawStatusLine(AudioStatus, YPos, AudioColor);
 
-	YPos += LineHeight * 0.3f;
-
-	// ===== SCAN DATA =====
-	if (ScannerCamera->IsCinematicScanActive() || ScannerCamera->GetRecordedDataCount() > 0)
-	{
-		DrawSectionHeader(TEXT("SCAN DATA:"), YPos);
-		DrawStatusLine(FString::Printf(TEXT("Orbit: %.1f° | Points: %d"), 
-			ScannerCamera->GetCurrentOrbitAngle(),
-			ScannerCamera->GetRecordedDataCount()), YPos, FLinearColor(0.0f, 1.0f, 1.0f));  // Cyan color
-		DrawStatusLine(FString::Printf(TEXT("Time: %.1fs"), 
-			ScannerCamera->GetCinematicScanElapsedTime()), YPos);
-		
-		YPos += LineHeight * 0.3f;
-	}
+	YPos += LineHeight * 0.5f;
 	
-	// ===== ROTATION HISTORY (Last 10) =====
+	// ===== ROTATION HISTORY (Last 10) - AT BOTTOM =====
 	if (RotationHistory.Num() > 0)
 	{
 		DrawSectionHeader(TEXT("ROTATION HISTORY (Last 10):"), YPos);
@@ -575,8 +590,10 @@ void ANKScannerHUD::NotifyHitBoxClick(FName BoxName)
 {
 	Super::NotifyHitBoxClick(BoxName);
 	
-	if (!ScannerCamera)
+	// SAFETY: Validate scanner camera exists
+	if (!ScannerCamera || !IsValid(ScannerCamera))
 	{
+		UE_LOG(LogTemp, Error, TEXT("NKScannerHUD: Cannot process click - scanner camera invalid!"));
 		return;
 	}
 	
@@ -590,11 +607,11 @@ void ANKScannerHUD::NotifyHitBoxClick(FName BoxName)
 		EScannerState CurrentState = ScannerCamera->GetScannerState();
 		AActor* Target = ScannerCamera->GetCinematicTargetLandscape();
 		
-		// Check if we have a target set
-		if (!Target)
+		// SAFETY: Check if target is valid and not being destroyed
+		if (!Target || !IsValid(Target))
 		{
-			UE_LOG(LogTemp, Error, TEXT("NKScannerHUD: Cannot start discovery - no target landscape set!"));
-			UE_LOG(LogTemp, Error, TEXT("NKScannerHUD: Please set 'Cinematic Target Landscape' in the Details panel"));
+			UE_LOG(LogTemp, Error, TEXT("NKScannerHUD: Cannot start discovery - target landscape is invalid!"));
+			UE_LOG(LogTemp, Error, TEXT("NKScannerHUD: Please set a valid 'Cinematic Target Landscape' in the Details panel"));
 			return;
 		}
 		
@@ -796,10 +813,14 @@ void ANKScannerHUD::UpdateMouseHover()
 		StartDiscoveryButton.bIsHovered = IsPointInButton(StartDiscoveryButton, CurrentMousePosition);
 		StartMappingButton.bIsHovered = IsPointInButton(StartMappingButton, CurrentMousePosition);
 		
-		// Update checkbox hover states
-		AutoDiscoveryCheckbox.bIsHovered = IsPointInCheckbox(AutoDiscoveryCheckbox, CurrentMousePosition);
-		AutoMappingCheckbox.bIsHovered = IsPointInCheckbox(AutoMappingCheckbox, CurrentMousePosition);
-		AutoResetCheckbox.bIsHovered = IsPointInCheckbox(AutoResetCheckbox, CurrentMousePosition);
+		// SAFETY: Only update checkbox hover if scanner camera is valid
+		if (ScannerCamera && IsValid(ScannerCamera))
+		{
+			// Update checkbox hover states
+			AutoDiscoveryCheckbox.bIsHovered = IsPointInCheckbox(AutoDiscoveryCheckbox, CurrentMousePosition);
+			AutoMappingCheckbox.bIsHovered = IsPointInCheckbox(AutoMappingCheckbox, CurrentMousePosition);
+			AutoResetCheckbox.bIsHovered = IsPointInCheckbox(AutoResetCheckbox, CurrentMousePosition);
+		}
 	}
 }
 
