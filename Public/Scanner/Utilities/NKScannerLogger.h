@@ -17,14 +17,16 @@ class TPCPP_API UNKScannerLogger : public UObject
 
 public:
 	UNKScannerLogger();
+	virtual ~UNKScannerLogger();
+	virtual void BeginDestroy() override;
 	
 	// ===== Configuration =====
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Logging")
-	bool bEnableLogging = false;
+	bool bEnableLogging = true;  // Enabled by default
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Logging")
-	bool bLogToFile = false;
+	bool bLogToFile = true;  // Enabled by default
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Logging", meta = (EditCondition = "bLogToFile"))
 	FString LogFilePath;
@@ -67,6 +69,9 @@ public:
 	
 	/** Get or create the global scanner logger instance */
 	static UNKScannerLogger* Get(UObject* WorldContextObject);
+	
+	/** Shutdown and cleanup the global logger instance */
+	static void Shutdown();
 	
 private:
 	// Internal logging

@@ -13,13 +13,59 @@ UNKScannerLogger::UNKScannerLogger()
 {
 }
 
+UNKScannerLogger::~UNKScannerLogger()
+{
+	UE_LOG(LogTemp, Log, TEXT("NKScannerLogger: Destructor called"));
+}
+
+void UNKScannerLogger::BeginDestroy()
+{
+	// Flush any remaining log data
+	if (bLogFileInitialized && !ResolvedLogPath.IsEmpty())
+	{
+		UE_LOG(LogTemp, Log, TEXT("NKScannerLogger: Shutting down, final log path: %s"), *ResolvedLogPath);
+	}
+	
+	// Remove from root to allow garbage collection
+	if (this == GlobalInstance)
+	{
+		GlobalInstance = nullptr;
+		RemoveFromRoot();
+	}
+	
+	Super::BeginDestroy();
+}
+
+void UNKScannerLogger::Shutdown()
+{
+	if (GlobalInstance && IsValid(GlobalInstance))
+	{
+		GlobalInstance->RemoveFromRoot();
+		GlobalInstance = nullptr;
+		
+		UE_LOG(LogTemp, Log, TEXT("NKScannerLogger: Global instance shutdown"));
+	}
+}
+
 UNKScannerLogger* UNKScannerLogger::Get(UObject* WorldContextObject)
 {
-	// Create singleton instance if it doesn't exist
-	if (!GlobalInstance && WorldContextObject)
+	// Return existing instance if valid
+	if (GlobalInstance && IsValid(GlobalInstance))
 	{
+		return GlobalInstance;
+	}
+	
+	// Create singleton instance if it doesn't exist
+	if (WorldContextObject)
+	{
+		UWorld* World = WorldContextObject->GetWorld();
+		if (!World)
+		{
+			return nullptr;
+		}
+		
 		GlobalInstance = NewObject<UNKScannerLogger>(
-			WorldContextObject->GetWorld(),
+			GetTransientPackage(),  // Use transient package instead of World
 			UNKScannerLogger::StaticClass()
 		);
 		
@@ -62,6 +108,12 @@ void UNKScannerLogger::LogInternal(const FString& Message, const FString& Catego
 		return;
 	}
 	
+	// Safety check: don't log during shutdown
+	if (!IsValid(this) || HasAnyFlags(RF_BeginDestroyed | RF_FinishDestroyed))
+	{
+		return;
+	}
+	
 	// Format the message
 	FString FormattedMessage = FormatMessage(Message, Category);
 	
@@ -80,7 +132,7 @@ void UNKScannerLogger::LogInternal(const FString& Message, const FString& Catego
 	}
 	
 	// Log to file if enabled
-	if (bLogToFile && !LogFilePath.IsEmpty())
+	if (bLogToFile)
 	{
 		WriteToLogFile(FormattedMessage);
 	}
