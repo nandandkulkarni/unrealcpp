@@ -121,9 +121,12 @@ float ANKMappingCamera::GetDiscoveryProgress() const
 
 void ANKMappingCamera::OnTargetFound(FHitResult HitResult)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera: Target found!"));
-	UE_LOG(LogTemp, Warning, TEXT("  Hit Actor: %s"), *HitResult.GetActor()->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera::OnTargetFound CALLED"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("  Hit Actor: %s"), HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("NULL"));
 	UE_LOG(LogTemp, Warning, TEXT("  Hit Distance: %.2f m"), HitResult.Distance / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Current State BEFORE transition: %d"), (int32)CurrentState);
 	
 	// Store first hit data
 	bHasFirstHit = true;
@@ -136,7 +139,10 @@ void ANKMappingCamera::OnTargetFound(FHitResult HitResult)
 	UE_LOG(LogTemp, Warning, TEXT("  Camera Pos: %s"), *FirstHitCameraPosition.ToString());
 	UE_LOG(LogTemp, Warning, TEXT("  Camera Rot: %s"), *FirstHitCameraRotation.ToString());
 	
+	UE_LOG(LogTemp, Warning, TEXT("  Calling TransitionToState(Discovered)..."));
 	TransitionToState(EMappingScannerState::Discovered);
+	UE_LOG(LogTemp, Warning, TEXT("  Current State AFTER transition: %d"), (int32)CurrentState);
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
 }
 
 void ANKMappingCamera::OnDiscoveryFailed()

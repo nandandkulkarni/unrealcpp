@@ -214,10 +214,16 @@ void ANKMappingScannerHUD::DrawRightSideButtons()
 	// ===== START DISCOVERY BUTTON (state-based) =====
 	EMappingScannerState State = MappingCamera->GetScannerState();
 	
+	// Set button text and color based on scanner state
 	if (State == EMappingScannerState::Discovering)
 	{
 		StartDiscoveryButton.ButtonText = TEXT("Cancel Discovery");
 		StartDiscoveryButton.NormalColor = HUDColors::ButtonCancel;
+	}
+	else if (State == EMappingScannerState::Discovered)
+	{
+		StartDiscoveryButton.ButtonText = TEXT("Start Mapping");
+		StartDiscoveryButton.NormalColor = HUDColors::ButtonNormal;
 	}
 	else
 	{

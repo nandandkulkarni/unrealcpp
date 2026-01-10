@@ -112,12 +112,16 @@ void UNKTargetFinderComponent::PerformDiscoveryShot()
 	
 	ShotCount++;
 	
+	UE_LOG(LogTemp, Log, TEXT("UNKTargetFinderComponent: Shot #%d at angle %.1f°"), ShotCount, CurrentAngle);
+	
 	// Rotate camera to current angle
 	RotateCameraToAngle(CurrentAngle);
 	
 	// Perform laser trace
 	FHitResult HitResult;
 	bool bHit = LaserTracer->PerformTrace(HitResult);
+	
+	UE_LOG(LogTemp, Log, TEXT("UNKTargetFinderComponent: Trace result: %s"), bHit ? TEXT("HIT") : TEXT("MISS"));
 	
 	// Fire progress event
 	OnDiscoveryProgress.Broadcast(ShotCount, CurrentAngle);
@@ -129,9 +133,13 @@ void UNKTargetFinderComponent::PerformDiscoveryShot()
 		FirstHit = HitResult;
 		FirstHitAngle = CurrentAngle;
 		
-		UE_LOG(LogTemp, Warning, TEXT("UNKTargetFinderComponent: Target found at angle %.1f°"), CurrentAngle);
+		UE_LOG(LogTemp, Warning, TEXT("UNKTargetFinderComponent: ✅ TARGET FOUND at angle %.1f°"), CurrentAngle);
+		UE_LOG(LogTemp, Warning, TEXT("  Hit Actor: %s"), HitResult.GetActor() ? *HitResult.GetActor()->GetName() : TEXT("NULL"));
+		UE_LOG(LogTemp, Warning, TEXT("  Broadcasting OnTargetFound event..."));
 		
 		OnTargetFound.Broadcast(HitResult);
+		
+		UE_LOG(LogTemp, Warning, TEXT("  Event broadcast complete, stopping discovery"));
 		StopDiscovery();
 		return;
 	}
