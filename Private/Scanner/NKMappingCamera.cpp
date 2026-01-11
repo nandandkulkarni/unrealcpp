@@ -7,6 +7,7 @@
 #include "Scanner/NKOverheadCamera.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "DrawDebugHelpers.h"
 
 ANKMappingCamera::ANKMappingCamera(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -141,11 +142,100 @@ void ANKMappingCamera::StartDiscovery()
 	}
 	else  // Relative mode
 	{
-		// Relative mode: Use current camera position and height
+		// Relative mode: Auto-position camera at specified distance from target
+		
+		// Calculate bounding sphere radius (farthest point from center)
+		float BoundingSphereRadius = TargetExtent.Size();  // Distance from center to corner
+		
+		// Calculate desired orbit radius (bounding sphere + clearance)
+		float ClearanceDistance = DistanceMeters * 100.0f;  // Convert meters to cm
+		float OrbitRadius = BoundingSphereRadius + ClearanceDistance;
+		
+		// Get current camera position and direction to target
+		FVector CurrentCameraPos = GetActorLocation();
+		FVector DirectionToCamera = (CurrentCameraPos - TargetCenter);
+		
+		// Calculate 2D horizontal direction (ignore Z for now)
+		FVector2D HorizontalDirection = FVector2D(DirectionToCamera.X, DirectionToCamera.Y);
+		float CurrentHorizontalDistance = HorizontalDirection.Size();
+		
+		if (CurrentHorizontalDistance > 0.1f)  // Avoid division by zero
+		{
+			HorizontalDirection.Normalize();
+		}
+		else
+		{
+			// Camera is directly above/below target, default to North
+			HorizontalDirection = FVector2D(0.0f, 1.0f);
+		}
+		
+		// Calculate new XY position at desired orbit radius
+		FVector2D TargetCenter2D = FVector2D(TargetCenter.X, TargetCenter.Y);
+		FVector2D NewXY = TargetCenter2D + (HorizontalDirection * OrbitRadius);
+		
+		// Calculate scan height at specified percentage
 		ScanHeight = TargetBounds.Min.Z + ((TargetBounds.Max.Z - TargetBounds.Min.Z) * (HeightPercent / 100.0f));
 		
-		UE_LOG(LogTemp, Warning, TEXT("Camera Position Mode: RELATIVE (Height: %.1f%%)"), HeightPercent);
+		// Set camera to new position
+		FVector NewCameraPosition = FVector(NewXY.X, NewXY.Y, ScanHeight);
+		SetActorLocation(NewCameraPosition);
+		
+		UE_LOG(LogTemp, Warning, TEXT("Camera Position Mode: RELATIVE"));
+		UE_LOG(LogTemp, Warning, TEXT("  Bounding Sphere Radius: %.2fm"), BoundingSphereRadius / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("  Clearance Distance: %.2fm"), ClearanceDistance / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("  Orbit Radius: %.2fm"), OrbitRadius / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("  Height: %.1f%% (%.2fm)"), HeightPercent, ScanHeight / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("  Camera moved from (%.1f, %.1f, %.1f) to (%.1f, %.1f, %.1f)"),
+			CurrentCameraPos.X / 100.0f, CurrentCameraPos.Y / 100.0f, CurrentCameraPos.Z / 100.0f,
+			NewCameraPosition.X / 100.0f, NewCameraPosition.Y / 100.0f, NewCameraPosition.Z / 100.0f);
 	}
+	
+	// ===== Debug Visualization =====
+	
+	// Draw cyan sphere at farthest bounding box point
+	// Calculate a point on the bounding sphere (use current camera direction)
+	FVector CurrentCameraPos = GetActorLocation();
+	FVector DirectionToCamera = (CurrentCameraPos - TargetCenter).GetSafeNormal();
+	float BoundingSphereRadius = TargetExtent.Size();
+	FVector FarthestPoint = TargetCenter + (DirectionToCamera * BoundingSphereRadius);
+	
+	DrawDebugSphere(
+		GetWorld(),
+		FarthestPoint,
+		50.0f,  // 50cm radius sphere
+		16,  // Segments
+		FColor::Cyan,
+		false,  // Not persistent (will fade)
+		60.0f,  // 60 second lifetime
+		0,  // Depth priority
+		5.0f  // Thickness
+	);
+	
+	// Draw orbit circle at scan height
+	// Circle has farthest point on its circumference and target center as center
+	float OrbitRadius = (CameraPositionMode == ECameraPositionMode::Center) ? 
+		FVector::Dist2D(CurrentCameraPos, TargetCenter) : 
+		BoundingSphereRadius + (DistanceMeters * 100.0f);
+	
+	DrawDebugCircle(
+		GetWorld(),
+		TargetCenter,
+		OrbitRadius,
+		64,  // Segments for smooth circle
+		FColor::Cyan,
+		false,  // Not persistent
+		60.0f,  // 60 second lifetime
+		0,  // Depth priority
+		10.0f,  // Thickness
+		FVector(0, 1, 0),  // Y-axis (for horizontal circle)
+		FVector(1, 0, 0),  // X-axis
+		false  // Don't draw axis
+	);
+	
+	UE_LOG(LogTemp, Warning, TEXT("DEBUG VISUALIZATION:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Cyan sphere at farthest point: (%.1f, %.1f, %.1f)"),
+		FarthestPoint.X / 100.0f, FarthestPoint.Y / 100.0f, FarthestPoint.Z / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Cyan circle radius: %.2fm"), OrbitRadius / 100.0f);
 	
 	// Auto-configure laser tracer based on target type
 	bool bIsLandscape = IsTargetLandscape();

@@ -109,30 +109,36 @@ protected:
 public:
 	// ===== Configuration =====
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Target")
+	// ===== Target Configuration =====
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Target")
 	AActor* TargetActor;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Camera Position")
+	// ===== Camera Positioning =====
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Camera Position")
 	ECameraPositionMode CameraPositionMode = ECameraPositionMode::Center;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Camera Position", 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Camera Position", 
 		meta = (ClampMin = "1", EditCondition = "CameraPositionMode == ECameraPositionMode::Center", EditConditionHides))
 	float CenterModeHeightMeters = 10.0f;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Target", 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Camera Position", 
 		meta = (ClampMin = "0", ClampMax = "100", EditCondition = "CameraPositionMode == ECameraPositionMode::Relative", EditConditionHides))
 	float HeightPercent = 50.0f;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Target", 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Camera Position", 
 		meta = (ClampMin = "1", EditCondition = "CameraPositionMode == ECameraPositionMode::Relative", EditConditionHides))
 	float DistanceMeters = 100.0f;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Overhead Camera")
-	bool bSpawnOverheadCamera = true;  // Spawn overhead camera on BeginPlay
+	// ===== Overhead Camera =====
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Overhead Camera", 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Overhead Camera")
+	bool bSpawnOverheadCamera = true;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Overhead Camera", 
 		meta = (ClampMin = "1"))
-	float OverheadCameraHeightMeters = 50.0f;  // Height above main camera
+	float OverheadCameraHeightMeters = 50.0f;
 	
 	// ===== High-Level Control =====
 	

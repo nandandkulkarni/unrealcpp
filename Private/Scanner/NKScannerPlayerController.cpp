@@ -3,11 +3,14 @@
 #include "Scanner/NKScannerPlayerController.h"
 #include "Scanner/NKMappingCamera.h"
 #include "Scanner/NKOverheadCamera.h"
+#include "Scanner/NKObserverCamera.h"
 #include "Camera/CameraActor.h"
+#include "CineCameraActor.h"
 #include "Kismet/GameplayStatics.h"
 
 ANKScannerPlayerController::ANKScannerPlayerController()
-	: CurrentCameraIndex(0), YawRotationSpeed(10.0f)
+	: CurrentCameraIndex(0), YawRotationSpeed(10.0f), bAutoSpawnObserverCamera(true), 
+	  ObserverCameraTarget(nullptr), ObserverCameraHeight(100.0f), SpawnedObserverCamera(nullptr)
 {
 }
 
@@ -22,6 +25,12 @@ void ANKScannerPlayerController::BeginPlay()
 	
 	UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Starting in GAME Mode (Press Tab to toggle UI)"));
 	
+	// Auto-spawn Observer Camera if enabled
+	if (bAutoSpawnObserverCamera)
+	{
+		SpawnObserverCamera();
+	}
+	
 	// Find all cameras in the level
 	FindAllCameras();
 	
@@ -30,6 +39,19 @@ void ANKScannerPlayerController::BeginPlay()
 	{
 		SwitchToCamera(0);
 	}
+}
+
+void ANKScannerPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// Destroy spawned Observer Camera when play ends
+	if (SpawnedObserverCamera)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Destroying auto-spawned Observer Camera"));
+		SpawnedObserverCamera->Destroy();
+		SpawnedObserverCamera = nullptr;
+	}
+	
+	Super::EndPlay(EndPlayReason);
 }
 
 void ANKScannerPlayerController::FindAllCameras()
@@ -43,25 +65,72 @@ void ANKScannerPlayerController::FindAllCameras()
 	if (MappingCamera)
 	{
 		AvailableCameras.Add(MappingCamera);
-		UE_LOG(LogTemp, Log, TEXT("Found Mapping Camera: %s"), *MappingCamera->GetName());
+		UE_LOG(LogTemp, Log, TEXT("[1] Found Mapping Camera: %s"), *MappingCamera->GetName());
 		
 		// Add its overhead camera if it exists
 		if (MappingCamera->GetOverheadCamera())
 		{
 			AvailableCameras.Add(MappingCamera->GetOverheadCamera());
-			UE_LOG(LogTemp, Log, TEXT("Found Overhead Camera: %s"), 
+			UE_LOG(LogTemp, Log, TEXT("[3] Found Overhead Camera: %s"), 
 				*MappingCamera->GetOverheadCamera()->GetName());
 		}
 	}
 	
-	// Find all other camera actors
+	// Find observer camera (including the auto-spawned one)
+	UE_LOG(LogTemp, Warning, TEXT("Searching for Observer Camera..."));
+	ANKObserverCamera* ObserverCamera = Cast<ANKObserverCamera>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ANKObserverCamera::StaticClass()));
+	
+	if (ObserverCamera)
+	{
+		AvailableCameras.Add(ObserverCamera);
+		UE_LOG(LogTemp, Log, TEXT("[2] Found Observer Camera: %s"), *ObserverCamera->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No Observer Camera found in level!"));
+	}
+	
+	// Find all CameraActor instances
 	TArray<AActor*> FoundCameras;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ACameraActor::StaticClass(), FoundCameras);
 	
+	UE_LOG(LogTemp, Warning, TEXT("Found %d CameraActor instances"), FoundCameras.Num());
+	
 	for (AActor* Camera : FoundCameras)
 	{
-		AvailableCameras.Add(Camera);
-		UE_LOG(LogTemp, Log, TEXT("Found Camera: %s"), *Camera->GetName());
+		// Skip if already added
+		if (!AvailableCameras.Contains(Camera))
+		{
+			AvailableCameras.Add(Camera);
+			UE_LOG(LogTemp, Log, TEXT("[4+] Found Camera: %s (Type: %s)"), 
+				*Camera->GetName(), *Camera->GetClass()->GetName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("Skipping already added camera: %s"), *Camera->GetName());
+		}
+	}
+	
+	// Find all CineCameraActor instances (separate from CameraActor)
+	TArray<AActor*> FoundCineCameras;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ACineCameraActor::StaticClass(), FoundCineCameras);
+	
+	UE_LOG(LogTemp, Warning, TEXT("Found %d CineCameraActor instances"), FoundCineCameras.Num());
+	
+	for (AActor* Camera : FoundCineCameras)
+	{
+		// Skip if already added (Observer camera inherits from CineCameraActor)
+		if (!AvailableCameras.Contains(Camera))
+		{
+			AvailableCameras.Add(Camera);
+			UE_LOG(LogTemp, Log, TEXT("[4+] Found CineCamera: %s (Type: %s)"), 
+				*Camera->GetName(), *Camera->GetClass()->GetName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("Skipping already added cine camera: %s"), *Camera->GetName());
+		}
 	}
 	
 	// Add player pawn as a camera option
@@ -72,6 +141,7 @@ void ANKScannerPlayerController::FindAllCameras()
 	}
 	
 	UE_LOG(LogTemp, Warning, TEXT("Total cameras found: %d"), AvailableCameras.Num());
+	UE_LOG(LogTemp, Warning, TEXT("Press 1=Mapping, 2=Observer, 3=Overhead, C=Cycle cameras"));
 }
 
 void ANKScannerPlayerController::SwitchToNextCamera()
@@ -132,6 +202,36 @@ void ANKScannerPlayerController::SwitchToMappingCamera()
 	UE_LOG(LogTemp, Warning, TEXT("Mapping camera not found in available cameras"));
 }
 
+void ANKScannerPlayerController::SwitchToObserverCamera()
+{
+	// Find observer camera in list
+	for (int32 i = 0; i < AvailableCameras.Num(); i++)
+	{
+		if (Cast<ANKObserverCamera>(AvailableCameras[i]))
+		{
+			SwitchToCamera(i);
+			return;
+		}
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("Observer camera not found in available cameras"));
+}
+
+void ANKScannerPlayerController::SwitchToOverheadCamera()
+{
+	// Find overhead camera in list
+	for (int32 i = 0; i < AvailableCameras.Num(); i++)
+	{
+		if (Cast<ANKOverheadCamera>(AvailableCameras[i]))
+		{
+			SwitchToCamera(i);
+			return;
+		}
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("Overhead camera not found in available cameras"));
+}
+
 FString ANKScannerPlayerController::GetCameraName(int32 Index) const
 {
 	if (!AvailableCameras.IsValidIndex(Index))
@@ -155,7 +255,11 @@ FString ANKScannerPlayerController::GetCameraName(int32 Index) const
 	// Add type prefix
 	if (Cast<ANKMappingCamera>(Camera))
 	{
-		return FString::Printf(TEXT("📷 %s"), *Label);
+		return FString::Printf(TEXT("📷 %s (Mapping)"), *Label);
+	}
+	else if (Cast<ANKObserverCamera>(Camera))
+	{
+		return FString::Printf(TEXT("🔭 %s (Observer)"), *Label);
 	}
 	else if (Camera->IsA(ANKOverheadCamera::StaticClass()))
 	{
@@ -199,6 +303,17 @@ void ANKScannerPlayerController::SetupInputComponent()
 	{
 		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ANKScannerPlayerController::ToggleUIMode);
 		
+		// Number keys for quick camera switching
+		InputComponent->BindKey(EKeys::One, IE_Pressed, this, &ANKScannerPlayerController::SwitchToMappingCamera);
+		InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &ANKScannerPlayerController::SwitchToObserverCamera);
+		InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &ANKScannerPlayerController::SwitchToOverheadCamera);
+		
+		// C key to cycle through cameras
+		InputComponent->BindKey(EKeys::C, IE_Pressed, this, &ANKScannerPlayerController::SwitchToNextCamera);
+		
+		// R key to refresh camera list (useful if Observer camera added after game start)
+		InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ANKScannerPlayerController::FindAllCameras);
+		
 		// Add arrow keys to move the VIEW TARGET camera (works in both modes)
 		InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraForward);
 		InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraBackward);
@@ -208,7 +323,7 @@ void ANKScannerPlayerController::SetupInputComponent()
 		InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraLeft);
 		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraRight);
 		
-		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Input bindings set up (Tab, Arrows, Shift+Arrows for yaw)"));
+		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Hotkeys - 1:Mapping 2:Observer 3:Overhead C:Cycle Tab:UI"));
 	}
 }
 
@@ -319,5 +434,75 @@ void ANKScannerPlayerController::ToggleUIMode()
 		SetInputMode(InputMode);
 		
 		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Switched to GAME MODE (camera control)"));
+	}
+}
+
+void ANKScannerPlayerController::SpawnObserverCamera()
+{
+	if (!GetWorld())
+	{
+		UE_LOG(LogTemp, Error, TEXT("ScannerPlayerController: Cannot spawn Observer Camera - no world!"));
+		return;
+	}
+	
+	// Don't spawn if one already exists in the level
+	ANKObserverCamera* ExistingObserver = Cast<ANKObserverCamera>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ANKObserverCamera::StaticClass()));
+	
+	if (ExistingObserver)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Observer Camera already exists in level, skipping auto-spawn"));
+		return;
+	}
+	
+	// Try to find a target if not set
+	if (!ObserverCameraTarget)
+	{
+		// Look for a MappingCamera's target
+		ANKMappingCamera* MappingCamera = Cast<ANKMappingCamera>(
+			UGameplayStatics::GetActorOfClass(GetWorld(), ANKMappingCamera::StaticClass()));
+		
+		if (MappingCamera && MappingCamera->TargetActor)
+		{
+			ObserverCameraTarget = MappingCamera->TargetActor;
+			UE_LOG(LogTemp, Log, TEXT("ScannerPlayerController: Using MappingCamera's target: %s"), 
+				*ObserverCameraTarget->GetName());
+		}
+	}
+	
+	if (!ObserverCameraTarget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: No target set for Observer Camera - will need to be set manually"));
+	}
+	
+	// Spawn the Observer Camera
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Name = FName(TEXT("AutoSpawned_ObserverCamera"));
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	
+	SpawnedObserverCamera = GetWorld()->SpawnActor<ANKObserverCamera>(
+		ANKObserverCamera::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		SpawnParams
+	);
+	
+	if (SpawnedObserverCamera)
+	{
+		// Configure the Observer Camera
+		SpawnedObserverCamera->TargetActor = ObserverCameraTarget;
+		SpawnedObserverCamera->HeightAboveTargetMeters = ObserverCameraHeight;
+		SpawnedObserverCamera->bAutoPositionOnBeginPlay = true;
+		
+		UE_LOG(LogTemp, Warning, TEXT("========================================"));
+		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Auto-spawned Observer Camera"));
+		UE_LOG(LogTemp, Warning, TEXT("  Name: %s"), *SpawnedObserverCamera->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("  Target: %s"), ObserverCameraTarget ? *ObserverCameraTarget->GetName() : TEXT("NONE"));
+		UE_LOG(LogTemp, Warning, TEXT("  Height: %.1fm"), ObserverCameraHeight);
+		UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("ScannerPlayerController: Failed to spawn Observer Camera!"));
 	}
 }

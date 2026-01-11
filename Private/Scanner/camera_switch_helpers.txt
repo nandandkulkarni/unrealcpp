@@ -1,0 +1,30 @@
+
+void ANKScannerPlayerController::SwitchToObserverCamera()
+{
+	// Find observer camera in list
+	for (int32 i = 0; i < AvailableCameras.Num(); i++)
+	{
+		if (Cast<ANKObserverCamera>(AvailableCameras[i]))
+		{
+			SwitchToCamera(i);
+			return;
+		}
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("Observer camera not found in available cameras"));
+}
+
+void ANKScannerPlayerController::SwitchToOverheadCamera()
+{
+	// Find overhead camera in list
+	for (int32 i = 0; i < AvailableCameras.Num(); i++)
+	{
+		if (Cast<ANKOverheadCamera>(AvailableCameras[i]))
+		{
+			SwitchToCamera(i);
+			return;
+		}
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("Overhead camera not found in available cameras"));
+}

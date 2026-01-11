@@ -18,6 +18,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupInputComponent() override;
 
 public:
@@ -98,6 +99,18 @@ public:
 	void SwitchToMappingCamera();
 	
 	/**
+	 * Switch to observer camera specifically
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void SwitchToObserverCamera();
+	
+	/**
+	 * Switch to overhead camera specifically
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void SwitchToOverheadCamera();
+	
+	/**
 	 * Get current camera index
 	 */
 	UFUNCTION(BlueprintPure, Category = "Camera")
@@ -135,7 +148,34 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Camera")
 	float YawRotationSpeed = 5.0f;  // Degrees per key press
 	
+	// ===== Observer Camera Auto-Spawn =====
+	
+	/**
+	 * Auto-spawn Observer Camera on BeginPlay
+	 */
+	UPROPERTY(EditAnywhere, Category = "Observer Camera")
+	bool bAutoSpawnObserverCamera = true;
+	
+	/**
+	 * Target actor for the Observer Camera to observe
+	 */
+	UPROPERTY(EditAnywhere, Category = "Observer Camera")
+	AActor* ObserverCameraTarget = nullptr;
+	
+	/**
+	 * Height above target for the Observer Camera (in meters)
+	 */
+	UPROPERTY(EditAnywhere, Category = "Observer Camera", meta = (ClampMin = "10", ClampMax = "500"))
+	float ObserverCameraHeight = 100.0f;
+	
+	/**
+	 * Reference to spawned Observer Camera (auto-destroyed on EndPlay)
+	 */
+	UPROPERTY()
+	class ANKObserverCamera* SpawnedObserverCamera = nullptr;
+	
 	// ===== Helper Methods =====
 	
+	void SpawnObserverCamera();
 	void PerformCameraSwitch(AActor* NewCamera);
 };
