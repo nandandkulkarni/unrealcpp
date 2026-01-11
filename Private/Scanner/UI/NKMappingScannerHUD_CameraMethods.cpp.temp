@@ -1,0 +1,48 @@
+// Add these methods at the end of NKMappingScannerHUD.cpp, before the closing brace
+
+void ANKMappingScannerHUD::UpdateCameraButtons()
+{
+	CameraButtons.Empty();
+	
+	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+	if (!ScannerPC)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HUD: PlayerController is not ANKScannerPlayerController - no camera buttons"));
+		return;
+	}
+	
+	int32 CameraCount = ScannerPC->GetCameraCount();
+	UE_LOG(LogTemp, Log, TEXT("HUD: Creating %d camera buttons"), CameraCount);
+	
+	for (int32 i = 0; i < CameraCount; i++)
+	{
+		FSimpleHUDButton CameraButton;
+		CameraButton.ButtonText = ScannerPC->GetCameraName(i);
+		CameraButton.Size = FVector2D(220.0f, 35.0f);
+		CameraButton.NormalColor = HUDColors::ButtonNormal;
+		CameraButton.HoverColor = HUDColors::ButtonHover;
+		
+		CameraButtons.Add(CameraButton);
+		
+		UE_LOG(LogTemp, Log, TEXT("  Camera %d: %s"), i, *CameraButton.ButtonText);
+	}
+}
+
+void ANKMappingScannerHUD::DrawCameraInfo(float& YPos)
+{
+	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+	if (!ScannerPC)
+	{
+		return;
+	}
+	
+	YPos += LineHeight * 0.5f;
+	DrawLine(TEXT("ACTIVE CAMERA:"), YPos, HUDColors::Header);
+	
+	FString CurrentCameraName = ScannerPC->GetCurrentCameraName();
+	int32 CurrentIndex = ScannerPC->GetCurrentCameraIndex();
+	int32 TotalCameras = ScannerPC->GetCameraCount();
+	
+	DrawLine(FString::Printf(TEXT("• %s"), *CurrentCameraName), YPos, HUDColors::Success);
+	DrawLine(FString::Printf(TEXT("• Camera %d of %d"), CurrentIndex + 1, TotalCameras), YPos, HUDColors::SubText);
+}

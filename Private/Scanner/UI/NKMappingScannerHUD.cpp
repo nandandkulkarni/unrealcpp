@@ -2,6 +2,7 @@
 
 #include "Scanner/UI/NKMappingScannerHUD.h"
 #include "Scanner/NKMappingCamera.h"
+#include "Scanner/NKScannerPlayerController.h"
 #include "Scanner/Utilities/NKScannerLogger.h"
 #include "Engine/Canvas.h"
 #include "Kismet/GameplayStatics.h"
@@ -26,6 +27,9 @@ void ANKMappingScannerHUD::BeginPlay()
 {
 	Super::BeginPlay();
 	FindMappingCamera();
+	
+	// Initialize camera buttons
+	UpdateCameraButtons();
 }
 
 void ANKMappingScannerHUD::DrawHUD()
@@ -57,6 +61,14 @@ void ANKMappingScannerHUD::DrawHUD()
 		bUIMode = PC->bShowMouseCursor;
 	}
 	
+	// Update camera buttons if needed (PlayerController might not have been ready in BeginPlay)
+	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(PC);
+	if (ScannerPC && CameraButtons.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HUD: Camera buttons empty, refreshing..."));
+		UpdateCameraButtons();
+	}
+	
 	// Update button hover states
 	UpdateButtonHover();
 	
@@ -76,6 +88,22 @@ void ANKMappingScannerHUD::FindMappingCamera()
 
 void ANKMappingScannerHUD::DrawLeftSideInfo(float& YPos)
 {
+	// ===== DRAW BACKGROUND (if enabled) =====
+	if (bShowBackground && Canvas)
+	{
+		// Calculate background height (approximate based on content)
+		float BackgroundHeight = Canvas->SizeY - TopMargin - 20.0f;
+		float BackgroundWidth = 500.0f;  // Fixed width for left panel
+		
+		FVector2D BackgroundPos(LeftMargin - BackgroundPadding, TopMargin - BackgroundPadding);
+		FVector2D BackgroundSize(BackgroundWidth, BackgroundHeight);
+		
+		// Draw semi-transparent background
+		FCanvasTileItem BackgroundTile(BackgroundPos, BackgroundSize, BackgroundColor);
+		BackgroundTile.BlendMode = SE_BLEND_Translucent;
+		Canvas->DrawItem(BackgroundTile);
+	}
+	
 	// ===== MODE DISPLAY (TOP SECTION) =====
 	FString ModeName = bUIMode ? TEXT("Input Controls Enabled") : TEXT("Input Controls Disabled");
 	FString ModeInstruction = bUIMode ? 
@@ -261,6 +289,38 @@ void ANKMappingScannerHUD::DrawRightSideButtons()
 	DrawButton(ClearLinesButton);
 	AddHitBox(ClearLinesButton.Position, ClearLinesButton.Size,
 		FName("ClearLinesButton"), false, 0);
+	
+	// ===== CAMERA BUTTONS (Dynamic) =====
+	float CurrentYPos = ButtonPadding + StartDiscoveryButton.Size.Y + ClearLinesButton.Size.Y + (ButtonSpacing * 2);
+	
+	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+	int32 CurrentCameraIndex = ScannerPC ? ScannerPC->GetCurrentCameraIndex() : -1;
+	
+	for (int32 i = 0; i < CameraButtons.Num(); i++)
+	{
+		FSimpleHUDButton& CameraButton = CameraButtons[i];
+		
+		// Highlight current camera
+		if (i == CurrentCameraIndex)
+		{
+			CameraButton.NormalColor = HUDColors::Success;  // Green for active camera
+		}
+		else
+		{
+			CameraButton.NormalColor = HUDColors::ButtonNormal;
+		}
+		
+		CameraButton.Position = FVector2D(
+			Canvas->SizeX - CameraButton.Size.X - ButtonPadding,
+			CurrentYPos
+		);
+		
+		DrawButton(CameraButton);
+		AddHitBox(CameraButton.Position, CameraButton.Size,
+			FName(*FString::Printf(TEXT("CameraButton_%d"), i)), false, 0);
+		
+		CurrentYPos += CameraButton.Size.Y + ButtonSpacing;
+	}
 }
 
 void ANKMappingScannerHUD::DrawLine(const FString& Text, float& YPos, FLinearColor Color)
@@ -308,6 +368,12 @@ void ANKMappingScannerHUD::UpdateButtonHover()
 	
 	StartDiscoveryButton.bIsHovered = IsPointInButton(StartDiscoveryButton, MousePos);
 	ClearLinesButton.bIsHovered = IsPointInButton(ClearLinesButton, MousePos);
+	
+	// Update hover for all camera buttons
+	for (FSimpleHUDButton& CameraButton : CameraButtons)
+	{
+		CameraButton.bIsHovered = IsPointInButton(CameraButton, MousePos);
+	}
 }
 
 void ANKMappingScannerHUD::NotifyHitBoxClick(FName BoxName)
@@ -337,6 +403,27 @@ void ANKMappingScannerHUD::NotifyHitBoxClick(FName BoxName)
 	else if (BoxName == "ClearLinesButton")
 	{
 		MappingCamera->ClearDiscoveryLines();
+		UE_LOG(LogTemp, Log, TEXT("HUD: Clear Discovery Lines button clicked"));
+	}
+	else if (BoxName.ToString().StartsWith(TEXT("CameraButton_")))
+	{
+		// Extract camera index from button name
+		FString IndexStr = BoxName.ToString().RightChop(13);  // Remove "CameraButton_"
+		int32 CameraIndex = FCString::Atoi(*IndexStr);
+		
+		UE_LOG(LogTemp, Warning, TEXT("HUD: Camera button %d clicked"), CameraIndex);
+		
+		// Call PlayerController to switch camera
+		ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+		if (ScannerPC)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("  Switching to camera index %d"), CameraIndex);
+			ScannerPC->SwitchToCamera(CameraIndex);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("  PlayerController is not ANKScannerPlayerController!"));
+		}
 	}
 }
 
@@ -353,4 +440,69 @@ FString ANKMappingScannerHUD::GetStateDisplayName(uint8 State) const
 	case EMappingScannerState::Complete: return TEXT("Complete");
 	default: return TEXT("Unknown");
 	}
+}
+
+void ANKMappingScannerHUD::UpdateCameraButtons()
+{
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("HUD::UpdateCameraButtons() called"));
+	
+	CameraButtons.Empty();
+	
+	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+	if (!ScannerPC)
+	{
+		UE_LOG(LogTemp, Error, TEXT("  PlayerController is not ANKScannerPlayerController!"));
+		UE_LOG(LogTemp, Error, TEXT("  Actual type: %s"), 
+			GetOwningPlayerController() ? *GetOwningPlayerController()->GetClass()->GetName() : TEXT("NULL"));
+		UE_LOG(LogTemp, Warning, TEXT("========================================"));
+		return;
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("  PlayerController is correct type"));
+	
+	int32 CameraCount = ScannerPC->GetCameraCount();
+	UE_LOG(LogTemp, Warning, TEXT("  Camera count: %d"), CameraCount);
+	
+	if (CameraCount == 0)
+	{
+		UE_LOG(LogTemp, Error, TEXT("  No cameras found! PlayerController hasn't discovered cameras yet."));
+		UE_LOG(LogTemp, Warning, TEXT("========================================"));
+		return;
+	}
+	
+	for (int32 i = 0; i < CameraCount; i++)
+	{
+		FSimpleHUDButton CameraButton;
+		CameraButton.ButtonText = ScannerPC->GetCameraName(i);
+		CameraButton.Size = FVector2D(220.0f, 35.0f);
+		CameraButton.NormalColor = HUDColors::ButtonNormal;
+		CameraButton.HoverColor = HUDColors::ButtonHover;
+		
+		CameraButtons.Add(CameraButton);
+		
+		UE_LOG(LogTemp, Warning, TEXT("  Created button %d: %s"), i, *CameraButton.ButtonText);
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("  Total buttons created: %d"), CameraButtons.Num());
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+}
+
+void ANKMappingScannerHUD::DrawCameraInfo(float& YPos)
+{
+	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+	if (!ScannerPC)
+	{
+		return;
+	}
+	
+	YPos += LineHeight * 0.5f;
+	DrawLine(TEXT("ACTIVE CAMERA:"), YPos, HUDColors::Header);
+	
+	FString CurrentCameraName = ScannerPC->GetCurrentCameraName();
+	int32 CurrentIndex = ScannerPC->GetCurrentCameraIndex();
+	int32 TotalCameras = ScannerPC->GetCameraCount();
+	
+	DrawLine(FString::Printf(TEXT("• %s"), *CurrentCameraName), YPos, HUDColors::Success);
+	DrawLine(FString::Printf(TEXT("• Camera %d of %d"), CurrentIndex + 1, TotalCameras), YPos, HUDColors::SubText);
 }

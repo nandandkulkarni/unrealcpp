@@ -101,6 +101,16 @@ private:
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	float FontScale = 1.0f;
 	
+	// Background settings
+	UPROPERTY(EditAnywhere, Category = "HUD|Background")
+	bool bShowBackground = true;  // Toggle background on/off
+	
+	UPROPERTY(EditAnywhere, Category = "HUD|Background", meta = (EditCondition = "bShowBackground"))
+	FLinearColor BackgroundColor = FLinearColor(0.0f, 0.0f, 0.0f, 0.7f);  // Semi-transparent black
+	
+	UPROPERTY(EditAnywhere, Category = "HUD|Background", meta = (EditCondition = "bShowBackground"))
+	float BackgroundPadding = 10.0f;  // Padding around text
+	
 	// ===== Mode State =====
 	
 	bool bUIMode;  // true = Input Controls Enabled (mouse visible, can click UI), false = Input Controls Disabled (camera movement, mouse hidden)
@@ -109,6 +119,9 @@ private:
 	
 	FSimpleHUDButton StartDiscoveryButton;
 	FSimpleHUDButton ClearLinesButton;
+	
+	// Dynamic camera buttons (created based on available cameras)
+	TArray<FSimpleHUDButton> CameraButtons;
 	
 	// ===== Helper Methods =====
 	
@@ -119,6 +132,9 @@ private:
 	void DrawButton(FSimpleHUDButton& Button);
 	bool IsPointInButton(const FSimpleHUDButton& Button, const FVector2D& Point) const;
 	void UpdateButtonHover();
+	
+	void UpdateCameraButtons();  // Rebuild camera button list
+	void DrawCameraInfo(float& YPos);  // Display current camera info
 	
 	FString GetStateDisplayName(uint8 State) const;
 };
