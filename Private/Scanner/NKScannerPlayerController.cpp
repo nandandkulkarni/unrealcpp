@@ -6,7 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 
 ANKScannerPlayerController::ANKScannerPlayerController()
-	: CurrentCameraIndex(0)
+	: CurrentCameraIndex(0), YawRotationSpeed(10.0f)
 {
 }
 
@@ -189,10 +189,13 @@ void ANKScannerPlayerController::SetupInputComponent()
 		// Add arrow keys to move the VIEW TARGET camera (works in both modes)
 		InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraForward);
 		InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraBackward);
+		
+		// Note: Left/Right without Shift moves camera sideways
+		// We'll check for Shift in the movement functions themselves
 		InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraLeft);
 		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraRight);
 		
-		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Tab key bound to ToggleUIMode"));
+		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Input bindings set up (Tab, Arrows, Shift+Arrows for yaw)"));
 	}
 }
 
@@ -219,8 +222,16 @@ void ANKScannerPlayerController::MoveCameraLeft()
 {
 	if (AActor* ViewTarget = GetViewTarget())
 	{
-		FVector NewLocation = ViewTarget->GetActorLocation() - ViewTarget->GetActorRightVector() * 100.0f;
-		ViewTarget->SetActorLocation(NewLocation);
+		// Check if Shift is held - if so, rotate yaw instead of moving
+		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+		{
+			RotateCameraYawLeft();
+		}
+		else
+		{
+			FVector NewLocation = ViewTarget->GetActorLocation() - ViewTarget->GetActorRightVector() * 100.0f;
+			ViewTarget->SetActorLocation(NewLocation);
+		}
 	}
 }
 
@@ -228,8 +239,42 @@ void ANKScannerPlayerController::MoveCameraRight()
 {
 	if (AActor* ViewTarget = GetViewTarget())
 	{
-		FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorRightVector() * 100.0f;
-		ViewTarget->SetActorLocation(NewLocation);
+		// Check if Shift is held - if so, rotate yaw instead of moving
+		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+		{
+			RotateCameraYawRight();
+		}
+		else
+		{
+			FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorRightVector() * 100.0f;
+			ViewTarget->SetActorLocation(NewLocation);
+		}
+	}
+}
+
+void ANKScannerPlayerController::RotateCameraYawLeft()
+{
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		FRotator CurrentRotation = ViewTarget->GetActorRotation();
+		FRotator NewRotation = CurrentRotation;
+		NewRotation.Yaw -= YawRotationSpeed;  // Rotate left (counter-clockwise)
+		ViewTarget->SetActorRotation(NewRotation);
+		
+		UE_LOG(LogTemp, Log, TEXT("Camera yaw rotated left: %.1f°"), NewRotation.Yaw);
+	}
+}
+
+void ANKScannerPlayerController::RotateCameraYawRight()
+{
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		FRotator CurrentRotation = ViewTarget->GetActorRotation();
+		FRotator NewRotation = CurrentRotation;
+		NewRotation.Yaw += YawRotationSpeed;  // Rotate right (clockwise)
+		ViewTarget->SetActorRotation(NewRotation);
+		
+		UE_LOG(LogTemp, Log, TEXT("Camera yaw rotated right: %.1f°"), NewRotation.Yaw);
 	}
 }
 

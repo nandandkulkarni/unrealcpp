@@ -53,6 +53,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Camera")
 	void MoveCameraRight();
 	
+	/**
+	 * Rotate the ViewTarget camera yaw left (Shift + Left Arrow)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void RotateCameraYawLeft();
+	
+	/**
+	 * Rotate the ViewTarget camera yaw right (Shift + Right Arrow)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void RotateCameraYawRight();
+	
 	// ===== Camera Management =====
 	
 	/**
@@ -119,6 +131,9 @@ private:
 	
 	UPROPERTY(EditAnywhere, Category = "Camera")
 	float CameraBlendTime = 0.5f;
+	
+	UPROPERTY(EditAnywhere, Category = "Camera")
+	float YawRotationSpeed = 5.0f;  // Degrees per key press
 	
 	// ===== Helper Methods =====
 	

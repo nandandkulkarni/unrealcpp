@@ -49,10 +49,10 @@ public:
 	// ===== Configuration =====
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Discovery")
-	float AngularStepDegrees = 30.0f;  // Angle increment per shot
+	float AngularStepDegrees = 1.0f;  // Angle increment per shot (1° for fine detail)
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Discovery")
-	float ShotInterval = 0.5f;  // Time between shots in seconds
+	float ShotInterval = 0.1f;  // Time between shots in seconds (100ms)
 
 private:
 	// ===== Internal Methods =====
