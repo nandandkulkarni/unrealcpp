@@ -4,6 +4,7 @@
 #include "Scanner/Components/NKTargetFinderComponent.h"
 #include "Scanner/Components/NKLaserTracerComponent.h"
 #include "Scanner/Components/NKCameraControllerComponent.h"
+#include "Scanner/NKOverheadCamera.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -31,6 +32,42 @@ void ANKMappingCamera::BeginPlay()
 	{
 		TargetFinderComponent->GetOnTargetFoundEvent().AddDynamic(this, &ANKMappingCamera::OnTargetFound);
 		TargetFinderComponent->GetOnDiscoveryFailedEvent().AddDynamic(this, &ANKMappingCamera::OnDiscoveryFailed);
+	}
+	
+	// Spawn overhead camera if enabled
+	if (bSpawnOverheadCamera)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = this;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		
+		OverheadCameraActor = GetWorld()->SpawnActor<ANKOverheadCamera>(
+			ANKOverheadCamera::StaticClass(),
+			GetActorLocation(),
+			FRotator::ZeroRotator,
+			SpawnParams
+		);
+		
+		if (OverheadCameraActor)
+		{
+			// Attach to this actor (follows main camera movements)
+			OverheadCameraActor->AttachToActor(this, 
+				FAttachmentTransformRules::KeepRelativeTransform);
+			
+			// Set height offset above main camera
+			float HeightOffsetCm = OverheadCameraHeightMeters * 100.0f;
+			OverheadCameraActor->SetActorRelativeLocation(FVector(0.0f, 0.0f, HeightOffsetCm));
+			
+			// Configure overhead camera's height property
+			OverheadCameraActor->HeightOffsetMeters = OverheadCameraHeightMeters;
+			
+			UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera: Spawned overhead camera at %.1fm above"), 
+				OverheadCameraHeightMeters);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("ANKMappingCamera: Failed to spawn overhead camera!"));
+		}
 	}
 	
 	TransitionToState(EMappingScannerState::Idle);

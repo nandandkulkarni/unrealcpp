@@ -10,6 +10,7 @@
 class UNKTargetFinderComponent;
 class UNKLaserTracerComponent;
 class UNKCameraControllerComponent;
+class ANKOverheadCamera;
 
 // Scanner state
 UENUM(BlueprintType)
@@ -125,6 +126,13 @@ public:
 		meta = (ClampMin = "1", EditCondition = "CameraPositionMode == ECameraPositionMode::Relative", EditConditionHides))
 	float DistanceMeters = 100.0f;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Overhead Camera")
+	bool bSpawnOverheadCamera = true;  // Spawn overhead camera on BeginPlay
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner|Overhead Camera", 
+		meta = (ClampMin = "1"))
+	float OverheadCameraHeightMeters = 50.0f;  // Height above main camera
+	
 	// ===== High-Level Control =====
 	
 	/**
@@ -184,6 +192,14 @@ public:
 	
 	UFUNCTION(BlueprintPure, Category = "Scanner|Discovery")
 	FRotator GetFirstHitCameraRotation() const { return FirstHitCameraRotation; }
+	
+	// ===== Overhead Camera =====
+	
+	/**
+	 * Get reference to the overhead camera actor (if spawned)
+	 */
+	UFUNCTION(BlueprintPure, Category = "Scanner|Camera")
+	ANKOverheadCamera* GetOverheadCamera() const { return OverheadCameraActor; }
 
 private:
 	// ===== Components =====
@@ -196,6 +212,9 @@ private:
 	
 	UPROPERTY()
 	UNKCameraControllerComponent* CameraControllerComponent;
+	
+	UPROPERTY()
+	ANKOverheadCamera* OverheadCameraActor;  // Spawned overhead camera
 	
 	// ===== State =====
 	

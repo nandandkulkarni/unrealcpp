@@ -2,6 +2,7 @@
 
 #include "Scanner/NKScannerPlayerController.h"
 #include "Scanner/NKMappingCamera.h"
+#include "Scanner/NKOverheadCamera.h"
 #include "Camera/CameraActor.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -43,6 +44,14 @@ void ANKScannerPlayerController::FindAllCameras()
 	{
 		AvailableCameras.Add(MappingCamera);
 		UE_LOG(LogTemp, Log, TEXT("Found Mapping Camera: %s"), *MappingCamera->GetName());
+		
+		// Add its overhead camera if it exists
+		if (MappingCamera->GetOverheadCamera())
+		{
+			AvailableCameras.Add(MappingCamera->GetOverheadCamera());
+			UE_LOG(LogTemp, Log, TEXT("Found Overhead Camera: %s"), 
+				*MappingCamera->GetOverheadCamera()->GetName());
+		}
 	}
 	
 	// Find all other camera actors
@@ -147,6 +156,10 @@ FString ANKScannerPlayerController::GetCameraName(int32 Index) const
 	if (Cast<ANKMappingCamera>(Camera))
 	{
 		return FString::Printf(TEXT("📷 %s"), *Label);
+	}
+	else if (Camera->IsA(ANKOverheadCamera::StaticClass()))
+	{
+		return FString::Printf(TEXT("📐 %s (Overhead)"), *Label);
 	}
 	else if (Cast<ACameraActor>(Camera))
 	{
