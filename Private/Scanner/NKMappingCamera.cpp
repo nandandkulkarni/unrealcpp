@@ -23,6 +23,26 @@ ANKMappingCamera::ANKMappingCamera(const FObjectInitializer& ObjectInitializer)
 	CameraControllerComponent = CreateDefaultSubobject<UNKCameraControllerComponent>(TEXT("CameraControllerComponent"));
 }
 
+void ANKMappingCamera::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	
+	// Make camera mesh visible in game so overhead camera can see it
+	// ACineCameraActor has a mesh component that represents the camera visually
+	TArray<UActorComponent*> MeshComponents;
+	GetComponents(UStaticMeshComponent::StaticClass(), MeshComponents);
+	
+	for (UActorComponent* Component : MeshComponents)
+	{
+		if (UStaticMeshComponent* MeshComp = Cast<UStaticMeshComponent>(Component))
+		{
+			MeshComp->SetHiddenInGame(false);
+			UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera: Camera mesh '%s' set to visible in game"), 
+				*MeshComp->GetName());
+		}
+	}
+}
+
 void ANKMappingCamera::BeginPlay()
 {
 	Super::BeginPlay();
