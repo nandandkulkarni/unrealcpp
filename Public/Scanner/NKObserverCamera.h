@@ -71,9 +71,29 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Observer Camera")
 	float GetCurrentHeight() const;
+	
+	/**
+	 * Calculate optimal Z height for observer camera
+	 * Based on orbit radius and FOV to ensure entire orbit circle is visible
+	 * Always positioned above the target's highest point
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Observer Camera")
+	float CalculateOptimalHeight() const;
 
 private:
 	FVector LastTargetCenter;
 	float UpdateCheckInterval = 0.5f;  // Check for movement every 0.5 seconds
 	float TimeSinceLastCheck = 0.0f;
+	
+	/**
+	 * Wide-angle FOV for Observer Camera (in degrees)
+	 * 90° is a good balance between coverage and minimal distortion
+	 */
+	static constexpr float ObserverCameraFOV = 90.0f;
+	
+	/**
+	 * Safety margin multiplier for height calculation
+	 * 1.5 means camera will be 50% higher than minimum required
+	 */
+	static constexpr float HeightSafetyMargin = 1.5f;
 };

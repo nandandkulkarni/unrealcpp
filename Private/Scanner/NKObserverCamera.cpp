@@ -76,6 +76,18 @@ void ANKObserverCamera::PositionAboveTarget()
 		return;
 	}
 	
+	// Calculate optimal height dynamically
+	float CalculatedHeight = CalculateOptimalHeight();
+	
+	// Use calculated height instead of the configured HeightAboveTargetMeters
+	// (unless user has set a specific height they want to override)
+	float HeightToUse = CalculatedHeight;
+	
+	UE_LOG(LogTemp, Warning, TEXT("Observer Camera Height Selection:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Configured Height: %.2f m"), HeightAboveTargetMeters);
+	UE_LOG(LogTemp, Warning, TEXT("  Calculated Optimal Height: %.2f m"), CalculatedHeight);
+	UE_LOG(LogTemp, Warning, TEXT("  Using: CALCULATED (%.2f m)"), HeightToUse);
+	
 	// Get target bounding box
 	FBox TargetBounds = TargetActor->GetComponentsBoundingBox(true);
 	FVector TargetCenter = TargetBounds.GetCenter();
@@ -84,7 +96,7 @@ void ANKObserverCamera::PositionAboveTarget()
 	
 	// Calculate observer position
 	float HighestPoint = TargetMax.Z;
-	float HeightAboveTarget = HeightAboveTargetMeters * 100.0f;  // Convert to cm
+	float HeightAboveTarget = HeightToUse * 100.0f;  // Convert to cm
 	float ObserverHeight = HighestPoint + HeightAboveTarget;
 	
 	FVector ObserverPosition = FVector(
@@ -105,6 +117,15 @@ void ANKObserverCamera::PositionAboveTarget()
 	if (UCineCameraComponent* CineCamera = GetCineCameraComponent())
 	{
 		CineCamera->SetWorldRotation(LookAtRotation);
+		
+		// Set wide-angle FOV for better coverage
+		// Set focal length to achieve desired FOV (shorter focal length = wider FOV)
+		// For 90° FOV with 24.89mm sensor: focal length ≈ 14mm
+		CineCamera->CurrentFocalLength = 14.0f;  // Ultra-wide lens
+		
+		UE_LOG(LogTemp, Warning, TEXT("Observer Camera Lens Settings:"));
+		UE_LOG(LogTemp, Warning, TEXT("  Focal Length: %.1f mm (ultra-wide)"), CineCamera->CurrentFocalLength);
+		UE_LOG(LogTemp, Warning, TEXT("  Approximate FOV: ~90-100°"));
 	}
 	
 	// Store last target center for movement tracking
@@ -202,8 +223,8 @@ void ANKObserverCamera::PositionAboveTarget()
 		100.0f,  // 1m radius sphere
 		16,
 		FColor::Yellow,
-		false,
-		10.0f,  // 10 second lifetime
+		true,  // Persistent - never disappears
+		-1.0f,  // Infinite lifetime
 		0,
 		5.0f
 	);
@@ -214,8 +235,8 @@ void ANKObserverCamera::PositionAboveTarget()
 		ObserverPosition,
 		TargetCenter,
 		FColor::Yellow,
-		false,
-		10.0f,
+		true,  // Persistent
+		-1.0f,  // Infinite lifetime
 		0,
 		3.0f
 	);
@@ -226,11 +247,67 @@ void ANKObserverCamera::PositionAboveTarget()
 		TargetCenter,
 		TargetBounds.GetExtent(),
 		FColor::Green,
-		false,
-		10.0f,
+		true,  // Persistent
+		-1.0f,  // Infinite lifetime
 		0,
 		3.0f
 	);
+	
+	// Draw circle at the orbit height (where mapping camera travels)
+	// Calculate bounding sphere radius (farthest point from center)
+	FVector TargetExtent = TargetBounds.GetExtent();
+	float BoundingSphereRadius = TargetExtent.Size();  // 3D diagonal distance from center to corner
+	float HorizontalRadius = FVector2D(TargetExtent.X, TargetExtent.Y).Size();  // 2D horizontal radius
+	
+	// Calculate the orbit height (same as mapping camera scan height)
+	// Default to 50% of target height if not specified
+	float OrbitHeight = TargetCenter.Z;  // Use target center height as orbit level
+	
+	// Draw cyan circle at ORBIT HEIGHT (where mapping camera will travel)
+	// This circle represents the orbit path the mapping camera will take
+	FVector CircleCenter = FVector(TargetCenter.X, TargetCenter.Y, OrbitHeight);
+	
+	DrawDebugCircle(
+		GetWorld(),
+		CircleCenter,
+		BoundingSphereRadius,  // Radius is the bounding sphere radius (mapping camera orbit)
+		64,  // Segments for smooth circle
+		FColor::Cyan,
+		true,  // Persistent - never disappears
+		-1.0f,  // Infinite lifetime
+		0,  // Depth priority
+		8.0f,  // Thickness
+		FVector(0, 1, 0),  // Y-axis (for horizontal circle)
+		FVector(1, 0, 0),  // X-axis
+		false  // Don't draw axis
+	);
+	
+	// Also draw a smaller circle at horizontal radius only (ignoring Z extent)
+	DrawDebugCircle(
+		GetWorld(),
+		CircleCenter,
+		HorizontalRadius,  // Just the XY radius (horizontal footprint)
+		64,  // Segments
+		FColor::Orange,
+		true,  // Persistent - never disappears
+		-1.0f,  // Infinite lifetime
+		0,
+		5.0f,
+		FVector(0, 1, 0),
+		FVector(1, 0, 0),
+		false
+	);
+	
+	UE_LOG(LogTemp, Warning, TEXT("DEBUG VISUALIZATION:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Yellow sphere at observer position"));
+	UE_LOG(LogTemp, Warning, TEXT("  Yellow line from observer to target center"));
+	UE_LOG(LogTemp, Warning, TEXT("  Green box showing target bounding box"));
+	UE_LOG(LogTemp, Warning, TEXT("  Cyan circle at orbit height (mapping camera orbit): %.2f m radius at %.2f m height"), 
+		BoundingSphereRadius / 100.0f, OrbitHeight / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Orange circle at orbit height (horizontal footprint): %.2f m radius"), HorizontalRadius / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Circle center: (%.2f, %.2f, %.2f) m"), 
+		CircleCenter.X/100.0f, CircleCenter.Y/100.0f, CircleCenter.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  ALL DEBUG SHAPES ARE PERSISTENT (never disappear)"));
 }
 
 float ANKObserverCamera::GetCurrentHeight() const
@@ -245,4 +322,78 @@ float ANKObserverCamera::GetCurrentHeight() const
 	float CurrentHeight = GetActorLocation().Z;
 	
 	return (CurrentHeight - HighestPoint) / 100.0f;  // Return in meters
+}
+
+float ANKObserverCamera::CalculateOptimalHeight() const
+{
+	if (!TargetActor)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CalculateOptimalHeight: No target actor - returning default 100m"));
+		return 100.0f;  // Default 100m
+	}
+	
+	// Get target bounding box
+	FBox TargetBounds = TargetActor->GetComponentsBoundingBox(true);
+	FVector TargetCenter = TargetBounds.GetCenter();
+	FVector TargetExtent = TargetBounds.GetExtent();
+	float HighestPoint = TargetBounds.Max.Z;
+	
+	// Calculate orbit radius (bounding sphere radius)
+	// This is the radius of the circle the mapping camera will travel
+	float BoundingSphereRadius = TargetExtent.Size();  // 3D diagonal from center to corner
+	
+	// Calculate minimum height needed to see the entire orbit circle
+	// Formula: Height = Radius / tan(FOV/2)
+	// With wide FOV (90°), tan(45°) = 1, so Height = Radius
+	float HalfFOV = ObserverCameraFOV / 2.0f;  // 45° for 90° FOV
+	float HalfFOVRadians = FMath::DegreesToRadians(HalfFOV);
+	float TanHalfFOV = FMath::Tan(HalfFOVRadians);
+	
+	// Minimum height to see orbit circle (from orbit level, not ground)
+	float MinHeightAboveOrbit = BoundingSphereRadius / TanHalfFOV;
+	
+	// Add safety margin
+	float RecommendedHeightAboveOrbit = MinHeightAboveOrbit * HeightSafetyMargin;
+	
+	// Calculate absolute Z position
+	// Orbit is at target center Z, camera needs to be above that
+	float OrbitHeight = TargetCenter.Z;
+	float AbsoluteCameraZ = OrbitHeight + RecommendedHeightAboveOrbit;
+	
+	// Ensure camera is ALWAYS above the mountain's highest point
+	float MinAboveHighestPoint = 1000.0f;  // At least 10m (1000cm) above highest point
+	float MinAllowedZ = HighestPoint + MinAboveHighestPoint;
+	
+	if (AbsoluteCameraZ < MinAllowedZ)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CalculateOptimalHeight: Calculated Z (%.2f m) is below highest point + margin, adjusting to %.2f m"),
+			AbsoluteCameraZ / 100.0f, MinAllowedZ / 100.0f);
+		AbsoluteCameraZ = MinAllowedZ;
+	}
+	
+	// Convert to "height above highest point" for return value
+	float HeightAboveHighestPoint = AbsoluteCameraZ - HighestPoint;
+	
+	// Log the calculation
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("CALCULATE OPTIMAL OBSERVER HEIGHT"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("INPUTS:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Orbit Radius (bounding sphere): %.2f m"), BoundingSphereRadius / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Camera FOV: %.1f°"), ObserverCameraFOV);
+	UE_LOG(LogTemp, Warning, TEXT("  Target Highest Point: %.2f m"), HighestPoint / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Target Center Z: %.2f m"), TargetCenter.Z / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("CALCULATION:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Half FOV: %.1f°"), HalfFOV);
+	UE_LOG(LogTemp, Warning, TEXT("  tan(Half FOV): %.3f"), TanHalfFOV);
+	UE_LOG(LogTemp, Warning, TEXT("  Min Height Above Orbit: %.2f m"), MinHeightAboveOrbit / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Recommended Height (with %.1fx margin): %.2f m"), HeightSafetyMargin, RecommendedHeightAboveOrbit / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("RESULT:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Absolute Camera Z: %.2f m"), AbsoluteCameraZ / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Height Above Highest Point: %.2f m"), HeightAboveHighestPoint / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Can see orbit circle: %s"), AbsoluteCameraZ >= (OrbitHeight + MinHeightAboveOrbit) ? TEXT("YES") : TEXT("NO"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	
+	// Return height in meters (above highest point)
+	return HeightAboveHighestPoint / 100.0f;
 }
