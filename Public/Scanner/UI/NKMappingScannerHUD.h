@@ -135,6 +135,7 @@ private:
 	
 	void UpdateCameraButtons();  // Rebuild camera button list
 	void DrawCameraInfo(float& YPos);  // Display current camera info
+	void DrawAllCamerasInfo(float& YPos);  // Display all 3 cameras' positions and rotations
 	
 	FString GetStateDisplayName(uint8 State) const;
 };

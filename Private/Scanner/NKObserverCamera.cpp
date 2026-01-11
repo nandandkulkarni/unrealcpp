@@ -11,13 +11,19 @@ ANKObserverCamera::ANKObserverCamera(const FObjectInitializer& ObjectInitializer
 {
 	PrimaryActorTick.bCanEverTick = true;
 	
-	// Make camera mesh visible so it can be seen from other cameras
-	// (Same as mapping camera)
+	UE_LOG(LogTemp, Warning, TEXT("=========== OBSERVER CAMERA CREATED ==========="));
+	UE_LOG(LogTemp, Warning, TEXT("  Initial Location: %s"), *GetActorLocation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("  Initial Rotation: %s"), *GetActorRotation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("==============================================="));
 }
 
 void ANKObserverCamera::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
+	
+	UE_LOG(LogTemp, Warning, TEXT("=========== OBSERVER CAMERA POST INIT ==========="));
+	UE_LOG(LogTemp, Warning, TEXT("  Location: %s"), *GetActorLocation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("  Rotation: %s"), *GetActorRotation().ToString());
 	
 	// Make camera mesh visible in game
 	TArray<UActorComponent*> MeshComponents;
@@ -32,16 +38,35 @@ void ANKObserverCamera::PostInitializeComponents()
 				*MeshComp->GetName());
 		}
 	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("================================================="));
 }
 
 void ANKObserverCamera::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	UE_LOG(LogTemp, Warning, TEXT("╔═══════════════════════════════════════════════════════╗"));
+	UE_LOG(LogTemp, Warning, TEXT("║ OBSERVER CAMERA - BEGIN PLAY                          ║"));
+	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	UE_LOG(LogTemp, Warning, TEXT("║ BEFORE POSITIONING:                                   ║"));
+	UE_LOG(LogTemp, Warning, TEXT("║   Location: %s"), *GetActorLocation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("║   Rotation: %s"), *GetActorRotation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("║   Target: %s"), TargetActor ? *TargetActor->GetName() : TEXT("NULL"));
+	UE_LOG(LogTemp, Warning, TEXT("║   Auto Position: %s"), bAutoPositionOnBeginPlay ? TEXT("YES") : TEXT("NO"));
+	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
+	
 	if (bAutoPositionOnBeginPlay)
 	{
 		PositionAboveTarget();
 	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("╔═══════════════════════════════════════════════════════╗"));
+	UE_LOG(LogTemp, Warning, TEXT("║ OBSERVER CAMERA - AFTER BEGIN PLAY                    ║"));
+	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	UE_LOG(LogTemp, Warning, TEXT("║   Location: %s"), *GetActorLocation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("║   Rotation: %s"), *GetActorRotation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
 }
 
 void ANKObserverCamera::Tick(float DeltaTime)
@@ -111,12 +136,29 @@ void ANKObserverCamera::PositionAboveTarget()
 	// Set camera rotation (look down at target)
 	// Pitch -90 = looking straight down
 	FRotator LookAtRotation = FRotator(CameraPitchDegrees, 0.0f, 0.0f);
+	
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("CAMERA ROTATION DEBUG - BEFORE SETTING"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("  Desired Rotation: Pitch=%.2f, Yaw=%.2f, Roll=%.2f"), 
+		LookAtRotation.Pitch, LookAtRotation.Yaw, LookAtRotation.Roll);
+	UE_LOG(LogTemp, Warning, TEXT("  CameraPitchDegrees setting: %.2f"), CameraPitchDegrees);
+	UE_LOG(LogTemp, Warning, TEXT("  Current Actor Rotation BEFORE: %s"), *GetActorRotation().ToString());
+	
 	SetActorRotation(LookAtRotation);
+	
+	UE_LOG(LogTemp, Warning, TEXT("  Actor Rotation AFTER SetActorRotation: %s"), *GetActorRotation().ToString());
 	
 	// Also set the camera component's rotation to ensure it's looking down
 	if (UCineCameraComponent* CineCamera = GetCineCameraComponent())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("  Camera Component Rotation BEFORE: %s"), *CineCamera->GetComponentRotation().ToString());
+		
 		CineCamera->SetWorldRotation(LookAtRotation);
+		
+		UE_LOG(LogTemp, Warning, TEXT("  Camera Component Rotation AFTER SetWorldRotation: %s"), *CineCamera->GetComponentRotation().ToString());
+		
+		UE_LOG(LogTemp, Warning, TEXT("  Camera Component RELATIVE Rotation: %s"), *CineCamera->GetRelativeRotation().ToString());
 		
 		// Set wide-angle FOV for better coverage
 		// Set focal length to achieve desired FOV (shorter focal length = wider FOV)
@@ -127,6 +169,14 @@ void ANKObserverCamera::PositionAboveTarget()
 		UE_LOG(LogTemp, Warning, TEXT("  Focal Length: %.1f mm (ultra-wide)"), CineCamera->CurrentFocalLength);
 		UE_LOG(LogTemp, Warning, TEXT("  Approximate FOV: ~90-100°"));
 	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("FINAL ROTATION CHECK:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Final Actor Rotation: %s"), *GetActorRotation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("  Expected: P=-90.00 Y=0.00 R=0.00"));
+	UE_LOG(LogTemp, Warning, TEXT("  Is rotation correct? %s"), 
+		(FMath::Abs(GetActorRotation().Pitch + 90.0f) < 0.1f) ? TEXT("YES") : TEXT("NO - PROBLEM!"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
 	
 	// Store last target center for movement tracking
 	LastTargetCenter = TargetCenter;
@@ -140,8 +190,10 @@ void ANKObserverCamera::PositionAboveTarget()
 	UE_LOG(LogTemp, Warning, TEXT("TARGET ACTOR:"));
 	UE_LOG(LogTemp, Warning, TEXT("  Name: %s"), *TargetActor->GetName());
 	UE_LOG(LogTemp, Warning, TEXT("  Class: %s"), *TargetActor->GetClass()->GetName());
-	UE_LOG(LogTemp, Warning, TEXT("  Location: (%.2f, %.2f, %.2f) cm"), 
+	UE_LOG(LogTemp, Warning, TEXT("  Actor Location: (%.2f, %.2f, %.2f) cm"), 
 		TargetActor->GetActorLocation().X, TargetActor->GetActorLocation().Y, TargetActor->GetActorLocation().Z);
+	UE_LOG(LogTemp, Warning, TEXT("  Actor Location: (%.2f, %.2f, %.2f) m"), 
+		TargetActor->GetActorLocation().X/100.0f, TargetActor->GetActorLocation().Y/100.0f, TargetActor->GetActorLocation().Z/100.0f);
 	
 	// Bounding box details
 	UE_LOG(LogTemp, Warning, TEXT("TARGET BOUNDING BOX (in cm):"));
@@ -157,6 +209,12 @@ void ANKObserverCamera::PositionAboveTarget()
 	UE_LOG(LogTemp, Warning, TEXT("  Max: (%.2f, %.2f, %.2f) m"), TargetMax.X/100.0f, TargetMax.Y/100.0f, TargetMax.Z/100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("  Center: (%.2f, %.2f, %.2f) m"), TargetCenter.X/100.0f, TargetCenter.Y/100.0f, TargetCenter.Z/100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("  Highest Point: %.2f m"), HighestPoint / 100.0f);
+	
+	UE_LOG(LogTemp, Warning, TEXT("VERIFICATION - Are circles using TargetCenter XY?"));
+	UE_LOG(LogTemp, Warning, TEXT("  TargetCenter from bounding box: X=%.2f, Y=%.2f (this SHOULD be used)"), 
+		TargetCenter.X/100.0f, TargetCenter.Y/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Is target at world origin? %s"), 
+		(FMath::Abs(TargetCenter.X) < 10.0f && FMath::Abs(TargetCenter.Y) < 10.0f) ? TEXT("YES - target is near (0,0)") : TEXT("NO - target is offset from origin"));
 	
 	// Observer camera configuration
 	UE_LOG(LogTemp, Warning, TEXT("OBSERVER CAMERA SETTINGS:"));
@@ -298,15 +356,84 @@ void ANKObserverCamera::PositionAboveTarget()
 		false
 	);
 	
+	// Draw a large RED sphere at the CENTER TOP of the target to identify the center
+	// Place it at the target's highest point, not at Z=1m
+	FVector CenterMarker = FVector(TargetCenter.X, TargetCenter.Y, TargetMax.Z + 100.0f);  // 1m above target's highest point
+	
+	DrawDebugSphere(
+		GetWorld(),
+		CenterMarker,
+		300.0f,  // 3m radius sphere - very large to see from above
+		16,  // Segments
+		FColor::Red,
+		true,  // Persistent
+		-1.0f,  // Infinite lifetime
+		0,
+		10.0f  // Thick outline
+	);
+	
+	// Draw a cross at the center for extra visibility (also at top of target)
+	float CrossSize = 1000.0f;  // 10m long cross arms
+	FVector CrossCenter = FVector(TargetCenter.X, TargetCenter.Y, TargetMax.Z + 100.0f);
+	
+	// X-axis arm (red)
+	DrawDebugLine(
+		GetWorld(),
+		CrossCenter - FVector(CrossSize, 0, 0),
+		CrossCenter + FVector(CrossSize, 0, 0),
+		FColor::Red,
+		true,
+		-1.0f,
+		0,
+		20.0f  // Very thick
+	);
+	
+	// Y-axis arm (red)
+	DrawDebugLine(
+		GetWorld(),
+		CrossCenter - FVector(0, CrossSize, 0),
+		CrossCenter + FVector(0, CrossSize, 0),
+		FColor::Red,
+		true,
+		-1.0f,
+		0,
+		20.0f  // Very thick
+	);
+	
+	// Also draw a vertical line from ground to top of target for reference
+	DrawDebugLine(
+		GetWorld(),
+		FVector(TargetCenter.X, TargetCenter.Y, 0.0f),  // Ground level
+		FVector(TargetCenter.X, TargetCenter.Y, TargetMax.Z + 200.0f),  // 2m above target
+		FColor::Magenta,
+		true,
+		-1.0f,
+		0,
+		10.0f  // Thick line
+	);
+	
 	UE_LOG(LogTemp, Warning, TEXT("DEBUG VISUALIZATION:"));
-	UE_LOG(LogTemp, Warning, TEXT("  Yellow sphere at observer position"));
+	UE_LOG(LogTemp, Warning, TEXT("  Yellow sphere at observer position: (%.2f, %.2f, %.2f) m"), 
+		ObserverPosition.X/100.0f, ObserverPosition.Y/100.0f, ObserverPosition.Z/100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("  Yellow line from observer to target center"));
-	UE_LOG(LogTemp, Warning, TEXT("  Green box showing target bounding box"));
+	UE_LOG(LogTemp, Warning, TEXT("  Green box showing target bounding box at center: (%.2f, %.2f, %.2f) m"), 
+		TargetCenter.X/100.0f, TargetCenter.Y/100.0f, TargetCenter.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  RED SPHERE + CROSS at TOP of target: (%.2f, %.2f, %.2f) m"), 
+		TargetCenter.X/100.0f, TargetCenter.Y/100.0f, (TargetMax.Z + 100.0f)/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  MAGENTA vertical line from ground to top"));
 	UE_LOG(LogTemp, Warning, TEXT("  Cyan circle at orbit height (mapping camera orbit): %.2f m radius at %.2f m height"), 
 		BoundingSphereRadius / 100.0f, OrbitHeight / 100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("  Orange circle at orbit height (horizontal footprint): %.2f m radius"), HorizontalRadius / 100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("  Circle center: (%.2f, %.2f, %.2f) m"), 
 		CircleCenter.X/100.0f, CircleCenter.Y/100.0f, CircleCenter.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  "));
+	UE_LOG(LogTemp, Warning, TEXT("  TARGET INFO FOR REFERENCE:"));
+	UE_LOG(LogTemp, Warning, TEXT("    Ground Level Z: 0.00 m"));
+	UE_LOG(LogTemp, Warning, TEXT("    Target Min Z: %.2f m"), TargetMin.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("    Target Center Z: %.2f m"), TargetCenter.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("    Target Max Z (highest): %.2f m"), TargetMax.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("    Red Marker Z: %.2f m (1m above highest)"), (TargetMax.Z + 100.0f)/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  "));
 	UE_LOG(LogTemp, Warning, TEXT("  ALL DEBUG SHAPES ARE PERSISTENT (never disappear)"));
 }
 

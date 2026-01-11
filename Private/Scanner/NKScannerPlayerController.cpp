@@ -18,12 +18,16 @@ void ANKScannerPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	// Set default input mode to Game Mode (camera control)
-	FInputModeGameOnly InputMode;
+	// Set default input mode to Game AND UI Mode (mouse visible, can interact with both)
+	FInputModeGameAndUI InputMode;
+	InputMode.SetHideCursorDuringCapture(false);
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 	SetInputMode(InputMode);
-	bShowMouseCursor = false;
+	bShowMouseCursor = true;  // Show cursor by default
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
 	
-	UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Starting in GAME Mode (Press Tab to toggle UI)"));
+	UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Starting in UI MODE (mouse visible - Press Tab to toggle)"));
 	
 	// Auto-spawn Observer Camera if enabled
 	if (bAutoSpawnObserverCamera)
@@ -288,7 +292,23 @@ void ANKScannerPlayerController::PerformCameraSwitch(AActor* NewCamera)
 		return;
 	}
 	
-	UE_LOG(LogTemp, Warning, TEXT("Switching to camera: %s"), *NewCamera->GetName());
+	AActor* OldCamera = GetViewTarget();
+	
+	UE_LOG(LogTemp, Warning, TEXT("╔═══════════════════════════════════════════════════════╗"));
+	UE_LOG(LogTemp, Warning, TEXT("║ CAMERA SWITCH                                         ║"));
+	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	UE_LOG(LogTemp, Warning, TEXT("║ FROM: %s"), OldCamera ? *OldCamera->GetName() : TEXT("NULL"));
+	if (OldCamera)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("║   Location: %s"), *OldCamera->GetActorLocation().ToString());
+		UE_LOG(LogTemp, Warning, TEXT("║   Rotation: %s"), *OldCamera->GetActorRotation().ToString());
+	}
+	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	UE_LOG(LogTemp, Warning, TEXT("║ TO:   %s"), *NewCamera->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("║   Location: %s"), *NewCamera->GetActorLocation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("║   Rotation: %s"), *NewCamera->GetActorRotation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("║   Class: %s"), *NewCamera->GetClass()->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
 	
 	// Smooth blend to new camera
 	SetViewTargetWithBlend(NewCamera, CameraBlendTime);
@@ -331,6 +351,8 @@ void ANKScannerPlayerController::MoveCameraForward()
 {
 	if (AActor* ViewTarget = GetViewTarget())
 	{
+		FVector LocationBefore = ViewTarget->GetActorLocation();
+		
 		// Check if Shift is held - if so, move up instead
 		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
 		{
@@ -340,6 +362,10 @@ void ANKScannerPlayerController::MoveCameraForward()
 		{
 			FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorForwardVector() * 100.0f;
 			ViewTarget->SetActorLocation(NewLocation);
+			
+			UE_LOG(LogTemp, Log, TEXT("🎥 CAMERA MOVE FORWARD: %s"), *ViewTarget->GetName());
+			UE_LOG(LogTemp, Log, TEXT("   Before: %s"), *LocationBefore.ToString());
+			UE_LOG(LogTemp, Log, TEXT("   After:  %s"), *NewLocation.ToString());
 		}
 	}
 }
@@ -348,6 +374,8 @@ void ANKScannerPlayerController::MoveCameraBackward()
 {
 	if (AActor* ViewTarget = GetViewTarget())
 	{
+		FVector LocationBefore = ViewTarget->GetActorLocation();
+		
 		// Check if Shift is held - if so, move down instead
 		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
 		{
@@ -357,6 +385,10 @@ void ANKScannerPlayerController::MoveCameraBackward()
 		{
 			FVector NewLocation = ViewTarget->GetActorLocation() - ViewTarget->GetActorForwardVector() * 100.0f;
 			ViewTarget->SetActorLocation(NewLocation);
+			
+			UE_LOG(LogTemp, Log, TEXT("🎥 CAMERA MOVE BACKWARD: %s"), *ViewTarget->GetName());
+			UE_LOG(LogTemp, Log, TEXT("   Before: %s"), *LocationBefore.ToString());
+			UE_LOG(LogTemp, Log, TEXT("   After:  %s"), *NewLocation.ToString());
 		}
 	}
 }
@@ -365,6 +397,8 @@ void ANKScannerPlayerController::MoveCameraLeft()
 {
 	if (AActor* ViewTarget = GetViewTarget())
 	{
+		FVector LocationBefore = ViewTarget->GetActorLocation();
+		
 		// Check if Shift is held - if so, rotate yaw instead of moving
 		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
 		{
@@ -374,6 +408,10 @@ void ANKScannerPlayerController::MoveCameraLeft()
 		{
 			FVector NewLocation = ViewTarget->GetActorLocation() - ViewTarget->GetActorRightVector() * 100.0f;
 			ViewTarget->SetActorLocation(NewLocation);
+			
+			UE_LOG(LogTemp, Log, TEXT("🎥 CAMERA MOVE LEFT: %s"), *ViewTarget->GetName());
+			UE_LOG(LogTemp, Log, TEXT("   Before: %s"), *LocationBefore.ToString());
+			UE_LOG(LogTemp, Log, TEXT("   After:  %s"), *NewLocation.ToString());
 		}
 	}
 }
@@ -382,6 +420,8 @@ void ANKScannerPlayerController::MoveCameraRight()
 {
 	if (AActor* ViewTarget = GetViewTarget())
 	{
+		FVector LocationBefore = ViewTarget->GetActorLocation();
+		
 		// Check if Shift is held - if so, rotate yaw instead of moving
 		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
 		{
@@ -391,6 +431,10 @@ void ANKScannerPlayerController::MoveCameraRight()
 		{
 			FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorRightVector() * 100.0f;
 			ViewTarget->SetActorLocation(NewLocation);
+			
+			UE_LOG(LogTemp, Log, TEXT("🎥 CAMERA MOVE RIGHT: %s"), *ViewTarget->GetName());
+			UE_LOG(LogTemp, Log, TEXT("   Before: %s"), *LocationBefore.ToString());
+			UE_LOG(LogTemp, Log, TEXT("   After:  %s"), *NewLocation.ToString());
 		}
 	}
 }
@@ -400,10 +444,12 @@ void ANKScannerPlayerController::MoveCameraUp()
 	if (AActor* ViewTarget = GetViewTarget())
 	{
 		FVector NewLocation = ViewTarget->GetActorLocation();
+		float ZBefore = NewLocation.Z;
 		NewLocation.Z += 100.0f;  // Move up 1 meter
 		ViewTarget->SetActorLocation(NewLocation);
 		
-		UE_LOG(LogTemp, Log, TEXT("Camera moved up to Z: %.1f"), NewLocation.Z / 100.0f);
+		UE_LOG(LogTemp, Log, TEXT("🎥 CAMERA MOVE UP: %s"), *ViewTarget->GetName());
+		UE_LOG(LogTemp, Log, TEXT("   Z Before: %.2f m → After: %.2f m (Δ +1.00 m)"), ZBefore / 100.0f, NewLocation.Z / 100.0f);
 	}
 }
 
@@ -412,10 +458,12 @@ void ANKScannerPlayerController::MoveCameraDown()
 	if (AActor* ViewTarget = GetViewTarget())
 	{
 		FVector NewLocation = ViewTarget->GetActorLocation();
+		float ZBefore = NewLocation.Z;
 		NewLocation.Z -= 100.0f;  // Move down 1 meter
 		ViewTarget->SetActorLocation(NewLocation);
 		
-		UE_LOG(LogTemp, Log, TEXT("Camera moved down to Z: %.1f"), NewLocation.Z / 100.0f);
+		UE_LOG(LogTemp, Log, TEXT("🎥 CAMERA MOVE DOWN: %s"), *ViewTarget->GetName());
+		UE_LOG(LogTemp, Log, TEXT("   Z Before: %.2f m → After: %.2f m (Δ -1.00 m)"), ZBefore / 100.0f, NewLocation.Z / 100.0f);
 	}
 }
 
@@ -428,7 +476,9 @@ void ANKScannerPlayerController::RotateCameraYawLeft()
 		NewRotation.Yaw -= YawRotationSpeed;  // Rotate left (counter-clockwise)
 		ViewTarget->SetActorRotation(NewRotation);
 		
-		UE_LOG(LogTemp, Log, TEXT("Camera yaw rotated left: %.1f°"), NewRotation.Yaw);
+		UE_LOG(LogTemp, Log, TEXT("🎥 CAMERA ROTATE YAW LEFT: %s"), *ViewTarget->GetName());
+		UE_LOG(LogTemp, Log, TEXT("   Yaw Before: %.2f° → After: %.2f° (Δ -%.1f°)"), 
+			CurrentRotation.Yaw, NewRotation.Yaw, YawRotationSpeed);
 	}
 }
 
@@ -441,7 +491,9 @@ void ANKScannerPlayerController::RotateCameraYawRight()
 		NewRotation.Yaw += YawRotationSpeed;  // Rotate right (clockwise)
 		ViewTarget->SetActorRotation(NewRotation);
 		
-		UE_LOG(LogTemp, Log, TEXT("Camera yaw rotated right: %.1f°"), NewRotation.Yaw);
+		UE_LOG(LogTemp, Log, TEXT("🎥 CAMERA ROTATE YAW RIGHT: %s"), *ViewTarget->GetName());
+		UE_LOG(LogTemp, Log, TEXT("   Yaw Before: %.2f° → After: %.2f° (Δ +%.1f°)"), 
+			CurrentRotation.Yaw, NewRotation.Yaw, YawRotationSpeed);
 	}
 }
 

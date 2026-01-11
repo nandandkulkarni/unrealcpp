@@ -2,6 +2,8 @@
 
 #include "Scanner/UI/NKMappingScannerHUD.h"
 #include "Scanner/NKMappingCamera.h"
+#include "Scanner/NKObserverCamera.h"
+#include "Scanner/NKOverheadCamera.h"
 #include "Scanner/NKScannerPlayerController.h"
 #include "Scanner/Utilities/NKScannerLogger.h"
 #include "Engine/Canvas.h"
@@ -200,6 +202,10 @@ void ANKMappingScannerHUD::DrawLeftSideInfo(float& YPos)
 	FRotator CamRot = MappingCamera->GetActorRotation();
 	DrawLine(FString::Printf(TEXT("• Rot: P=%.1f° Y=%.1f° R=%.1f°"), 
 		CamRot.Pitch, CamRot.Yaw, CamRot.Roll), YPos);
+	
+	// ===== ALL 3 CAMERAS INFO =====
+	YPos += LineHeight * 0.5f;
+	DrawAllCamerasInfo(YPos);
 	
 	// ===== LOGGING INFO =====
 	if (UNKScannerLogger* Logger = UNKScannerLogger::Get(GetWorld()))
@@ -505,4 +511,105 @@ void ANKMappingScannerHUD::DrawCameraInfo(float& YPos)
 	
 	DrawLine(FString::Printf(TEXT("• %s"), *CurrentCameraName), YPos, HUDColors::Success);
 	DrawLine(FString::Printf(TEXT("• Camera %d of %d"), CurrentIndex + 1, TotalCameras), YPos, HUDColors::SubText);
+}
+
+void ANKMappingScannerHUD::DrawAllCamerasInfo(float& YPos)
+{
+	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+	if (!ScannerPC)
+	{
+		return;
+	}
+	
+	// Find all 3 camera types
+	ANKMappingCamera* MappingCam = Cast<ANKMappingCamera>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ANKMappingCamera::StaticClass()));
+	
+	ANKObserverCamera* ObserverCam = Cast<ANKObserverCamera>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ANKObserverCamera::StaticClass()));
+	
+	ANKOverheadCamera* OverheadCam = MappingCam ? MappingCam->GetOverheadCamera() : nullptr;
+	
+	DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+	DrawLine(TEXT("ALL CAMERAS STATUS"), YPos, HUDColors::Header);
+	DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+	
+	// ===== 1. MAPPING CAMERA =====
+	if (MappingCam)
+	{
+		DrawLine(TEXT("📷 MAPPING CAMERA"), YPos, HUDColors::ScanningMode);
+		
+		FVector Pos = MappingCam->GetActorLocation();
+		FRotator Rot = MappingCam->GetActorRotation();
+		
+		DrawLine(FString::Printf(TEXT("  Position (cm):  X=%7.1f  Y=%7.1f  Z=%7.1f"), 
+			Pos.X, Pos.Y, Pos.Z), YPos);
+		DrawLine(FString::Printf(TEXT("  Position (m):   X=%7.2f  Y=%7.2f  Z=%7.2f"), 
+			Pos.X/100.0f, Pos.Y/100.0f, Pos.Z/100.0f), YPos, HUDColors::SubText);
+		DrawLine(FString::Printf(TEXT("  Rotation (°):   P=%7.2f  Y=%7.2f  R=%7.2f"), 
+			Rot.Pitch, Rot.Yaw, Rot.Roll), YPos);
+		
+		YPos += LineHeight * 0.3f;
+	}
+	else
+	{
+		DrawLine(TEXT("📷 MAPPING CAMERA - NOT FOUND"), YPos, HUDColors::Error);
+		YPos += LineHeight * 0.3f;
+	}
+	
+	// ===== 2. OBSERVER CAMERA =====
+	if (ObserverCam)
+	{
+		DrawLine(TEXT("🔭 OBSERVER CAMERA"), YPos, HUDColors::ControlMode);
+		
+		FVector Pos = ObserverCam->GetActorLocation();
+		FRotator Rot = ObserverCam->GetActorRotation();
+		
+		DrawLine(FString::Printf(TEXT("  Position (cm):  X=%7.1f  Y=%7.1f  Z=%7.1f"), 
+			Pos.X, Pos.Y, Pos.Z), YPos);
+		DrawLine(FString::Printf(TEXT("  Position (m):   X=%7.2f  Y=%7.2f  Z=%7.2f"), 
+			Pos.X/100.0f, Pos.Y/100.0f, Pos.Z/100.0f), YPos, HUDColors::SubText);
+		DrawLine(FString::Printf(TEXT("  Rotation (°):   P=%7.2f  Y=%7.2f  R=%7.2f"), 
+			Rot.Pitch, Rot.Yaw, Rot.Roll), YPos);
+		
+		// Check if rotation is correct (should be -90 pitch)
+		bool bRotationCorrect = FMath::Abs(Rot.Pitch + 90.0f) < 0.1f;
+		FString RotStatus = bRotationCorrect ? TEXT("✅ Correct") : TEXT("❌ WRONG!");
+		FLinearColor RotStatusColor = bRotationCorrect ? HUDColors::Success : HUDColors::Error;
+		DrawLine(FString::Printf(TEXT("  Looking Down:   %s (expected P=-90°)"), *RotStatus), YPos, RotStatusColor);
+		
+		YPos += LineHeight * 0.3f;
+	}
+	else
+	{
+		DrawLine(TEXT("🔭 OBSERVER CAMERA - NOT FOUND"), YPos, HUDColors::Warning);
+		DrawLine(TEXT("  (Auto-spawns when game starts)"), YPos, HUDColors::SubText);
+		YPos += LineHeight * 0.3f;
+	}
+	
+	// ===== 3. OVERHEAD CAMERA =====
+	if (OverheadCam)
+	{
+		DrawLine(TEXT("📐 OVERHEAD CAMERA"), YPos, HUDColors::Progress);
+		
+		FVector Pos = OverheadCam->GetActorLocation();
+		FRotator Rot = OverheadCam->GetActorRotation();
+		
+		DrawLine(FString::Printf(TEXT("  Position (cm):  X=%7.1f  Y=%7.1f  Z=%7.1f"), 
+			Pos.X, Pos.Y, Pos.Z), YPos);
+		DrawLine(FString::Printf(TEXT("  Position (m):   X=%7.2f  Y=%7.2f  Z=%7.2f"), 
+			Pos.X/100.0f, Pos.Y/100.0f, Pos.Z/100.0f), YPos, HUDColors::SubText);
+		DrawLine(FString::Printf(TEXT("  Rotation (°):   P=%7.2f  Y=%7.2f  R=%7.2f"), 
+			Rot.Pitch, Rot.Yaw, Rot.Roll), YPos);
+		DrawLine(FString::Printf(TEXT("  (Attached to Mapping Camera)"), TEXT("")), YPos, HUDColors::SubText);
+		
+		YPos += LineHeight * 0.3f;
+	}
+	else
+	{
+		DrawLine(TEXT("📐 OVERHEAD CAMERA - NOT SPAWNED"), YPos, HUDColors::SubText);
+		YPos += LineHeight * 0.3f;
+	}
+	
+	DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
 }
