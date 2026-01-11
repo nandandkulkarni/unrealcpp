@@ -185,7 +185,51 @@ void ANKScannerPlayerController::SetupInputComponent()
 	if (InputComponent)
 	{
 		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ANKScannerPlayerController::ToggleUIMode);
+		
+		// Add arrow keys to move the VIEW TARGET camera (works in both modes)
+		InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraForward);
+		InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraBackward);
+		InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraLeft);
+		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraRight);
+		
 		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Tab key bound to ToggleUIMode"));
+	}
+}
+
+// Add these new functions to move the ViewTarget camera
+void ANKScannerPlayerController::MoveCameraForward()
+{
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorForwardVector() * 100.0f;
+		ViewTarget->SetActorLocation(NewLocation);
+	}
+}
+
+void ANKScannerPlayerController::MoveCameraBackward()
+{
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		FVector NewLocation = ViewTarget->GetActorLocation() - ViewTarget->GetActorForwardVector() * 100.0f;
+		ViewTarget->SetActorLocation(NewLocation);
+	}
+}
+
+void ANKScannerPlayerController::MoveCameraLeft()
+{
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		FVector NewLocation = ViewTarget->GetActorLocation() - ViewTarget->GetActorRightVector() * 100.0f;
+		ViewTarget->SetActorLocation(NewLocation);
+	}
+}
+
+void ANKScannerPlayerController::MoveCameraRight()
+{
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorRightVector() * 100.0f;
+		ViewTarget->SetActorLocation(NewLocation);
 	}
 }
 

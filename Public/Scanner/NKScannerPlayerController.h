@@ -29,6 +29,30 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Input")
 	void ToggleUIMode();
 	
+	/**
+	 * Move the ViewTarget camera forward (Arrow Up)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void MoveCameraForward();
+	
+	/**
+	 * Move the ViewTarget camera backward (Arrow Down)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void MoveCameraBackward();
+	
+	/**
+	 * Move the ViewTarget camera left (Arrow Left)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void MoveCameraLeft();
+	
+	/**
+	 * Move the ViewTarget camera right (Arrow Right)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void MoveCameraRight();
+	
 	// ===== Camera Management =====
 	
 	/**
