@@ -66,6 +66,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Camera")
 	void RotateCameraYawRight();
 	
+	/**
+	 * Move the ViewTarget camera up (Shift + Up Arrow)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void MoveCameraUp();
+	
+	/**
+	 * Move the ViewTarget camera down (Shift + Down Arrow)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void MoveCameraDown();
+	
 	// ===== Camera Management =====
 	
 	/**

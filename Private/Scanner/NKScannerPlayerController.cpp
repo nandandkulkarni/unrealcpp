@@ -315,15 +315,14 @@ void ANKScannerPlayerController::SetupInputComponent()
 		InputComponent->BindKey(EKeys::R, IE_Pressed, this, &ANKScannerPlayerController::FindAllCameras);
 		
 		// Add arrow keys to move the VIEW TARGET camera (works in both modes)
-		InputComponent->BindKey(EKeys::Up, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraForward);
-		InputComponent->BindKey(EKeys::Down, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraBackward);
+		// Use IE_Repeat so they work continuously when held down
+		InputComponent->BindKey(EKeys::Up, IE_Repeat, this, &ANKScannerPlayerController::MoveCameraForward);
+		InputComponent->BindKey(EKeys::Down, IE_Repeat, this, &ANKScannerPlayerController::MoveCameraBackward);
+		InputComponent->BindKey(EKeys::Left, IE_Repeat, this, &ANKScannerPlayerController::MoveCameraLeft);
+		InputComponent->BindKey(EKeys::Right, IE_Repeat, this, &ANKScannerPlayerController::MoveCameraRight);
 		
-		// Note: Left/Right without Shift moves camera sideways
-		// We'll check for Shift in the movement functions themselves
-		InputComponent->BindKey(EKeys::Left, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraLeft);
-		InputComponent->BindKey(EKeys::Right, IE_Pressed, this, &ANKScannerPlayerController::MoveCameraRight);
-		
-		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Hotkeys - 1:Mapping 2:Observer 3:Overhead C:Cycle Tab:UI"));
+		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Hotkeys - 1:Mapping 2:Observer 3:Overhead C:Cycle Tab:UI R:Refresh"));
+		UE_LOG(LogTemp, Warning, TEXT("Arrow Keys: Move camera | Shift+Arrows: Up/Down/Rotate"));
 	}
 }
 
@@ -332,8 +331,16 @@ void ANKScannerPlayerController::MoveCameraForward()
 {
 	if (AActor* ViewTarget = GetViewTarget())
 	{
-		FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorForwardVector() * 100.0f;
-		ViewTarget->SetActorLocation(NewLocation);
+		// Check if Shift is held - if so, move up instead
+		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+		{
+			MoveCameraUp();
+		}
+		else
+		{
+			FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorForwardVector() * 100.0f;
+			ViewTarget->SetActorLocation(NewLocation);
+		}
 	}
 }
 
@@ -341,8 +348,16 @@ void ANKScannerPlayerController::MoveCameraBackward()
 {
 	if (AActor* ViewTarget = GetViewTarget())
 	{
-		FVector NewLocation = ViewTarget->GetActorLocation() - ViewTarget->GetActorForwardVector() * 100.0f;
-		ViewTarget->SetActorLocation(NewLocation);
+		// Check if Shift is held - if so, move down instead
+		if (IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift))
+		{
+			MoveCameraDown();
+		}
+		else
+		{
+			FVector NewLocation = ViewTarget->GetActorLocation() - ViewTarget->GetActorForwardVector() * 100.0f;
+			ViewTarget->SetActorLocation(NewLocation);
+		}
 	}
 }
 
@@ -377,6 +392,30 @@ void ANKScannerPlayerController::MoveCameraRight()
 			FVector NewLocation = ViewTarget->GetActorLocation() + ViewTarget->GetActorRightVector() * 100.0f;
 			ViewTarget->SetActorLocation(NewLocation);
 		}
+	}
+}
+
+void ANKScannerPlayerController::MoveCameraUp()
+{
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		FVector NewLocation = ViewTarget->GetActorLocation();
+		NewLocation.Z += 100.0f;  // Move up 1 meter
+		ViewTarget->SetActorLocation(NewLocation);
+		
+		UE_LOG(LogTemp, Log, TEXT("Camera moved up to Z: %.1f"), NewLocation.Z / 100.0f);
+	}
+}
+
+void ANKScannerPlayerController::MoveCameraDown()
+{
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		FVector NewLocation = ViewTarget->GetActorLocation();
+		NewLocation.Z -= 100.0f;  // Move down 1 meter
+		ViewTarget->SetActorLocation(NewLocation);
+		
+		UE_LOG(LogTemp, Log, TEXT("Camera moved down to Z: %.1f"), NewLocation.Z / 100.0f);
 	}
 }
 
@@ -473,6 +512,8 @@ void ANKScannerPlayerController::SpawnObserverCamera()
 	if (!ObserverCameraTarget)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: No target set for Observer Camera - will need to be set manually"));
+		// Don't spawn without a target
+		return;
 	}
 	
 	// Spawn the Observer Camera
@@ -489,10 +530,14 @@ void ANKScannerPlayerController::SpawnObserverCamera()
 	
 	if (SpawnedObserverCamera)
 	{
-		// Configure the Observer Camera
+		// Configure the Observer Camera BEFORE BeginPlay runs
+		// Disable auto-positioning first to prevent the error
+		SpawnedObserverCamera->bAutoPositionOnBeginPlay = false;
 		SpawnedObserverCamera->TargetActor = ObserverCameraTarget;
 		SpawnedObserverCamera->HeightAboveTargetMeters = ObserverCameraHeight;
-		SpawnedObserverCamera->bAutoPositionOnBeginPlay = true;
+		
+		// Now manually trigger positioning after target is set
+		SpawnedObserverCamera->PositionAboveTarget();
 		
 		UE_LOG(LogTemp, Warning, TEXT("========================================"));
 		UE_LOG(LogTemp, Warning, TEXT("ScannerPlayerController: Auto-spawned Observer Camera"));
