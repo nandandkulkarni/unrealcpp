@@ -8,9 +8,8 @@
 ANKObserverCamera::ANKObserverCamera(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 	, TargetActor(nullptr)
-	, LastTargetCenter(FVector::ZeroVector)
 {
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;  // Observer Camera is stationary - no need to tick
 	
 	UE_LOG(LogTemp, Warning, TEXT("=========== OBSERVER CAMERA CREATED ==========="));
 	UE_LOG(LogTemp, Warning, TEXT("  Initial Location: %s"), *GetActorLocation().ToString());
@@ -55,6 +54,7 @@ void ANKObserverCamera::BeginPlay()
 	UE_LOG(LogTemp, Warning, TEXT("║   Rotation: %s"), *GetActorRotation().ToString());
 	UE_LOG(LogTemp, Warning, TEXT("║   Target: %s"), TargetActor ? *TargetActor->GetName() : TEXT("NULL"));
 	UE_LOG(LogTemp, Warning, TEXT("║   Auto Position: %s"), bAutoPositionOnBeginPlay ? TEXT("YES") : TEXT("NO"));
+	UE_LOG(LogTemp, Warning, TEXT("║   Camera is STATIONARY (no tracking)"), TEXT(""));
 	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
 	
 	if (bAutoPositionOnBeginPlay)
@@ -67,31 +67,8 @@ void ANKObserverCamera::BeginPlay()
 	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
 	UE_LOG(LogTemp, Warning, TEXT("║   Location: %s"), *GetActorLocation().ToString());
 	UE_LOG(LogTemp, Warning, TEXT("║   Rotation: %s"), *GetActorRotation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("║   Arrow keys will move this camera when active"));
 	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
-}
-
-void ANKObserverCamera::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-	
-	if (bTrackTargetMovement && TargetActor)
-	{
-		TimeSinceLastCheck += DeltaTime;
-		
-		if (TimeSinceLastCheck >= UpdateCheckInterval)
-		{
-			TimeSinceLastCheck = 0.0f;
-			
-			// Check if target has moved
-			FBox TargetBounds = TargetActor->GetComponentsBoundingBox(true);
-			FVector CurrentTargetCenter = TargetBounds.GetCenter();
-			
-			if (!CurrentTargetCenter.Equals(LastTargetCenter, 10.0f))  // 10cm tolerance
-			{
-				PositionAboveTarget();
-			}
-		}
-	}
 }
 
 void ANKObserverCamera::PositionAboveTarget()
@@ -178,9 +155,6 @@ void ANKObserverCamera::PositionAboveTarget()
 	UE_LOG(LogTemp, Warning, TEXT("  Is rotation correct? %s"), 
 		(FMath::Abs(GetActorRotation().Pitch + 90.0f) < 0.1f) ? TEXT("YES") : TEXT("NO - PROBLEM!"));
 	UE_LOG(LogTemp, Warning, TEXT("========================================"));
-	
-	// Store last target center for movement tracking
-	LastTargetCenter = TargetCenter;
 	
 	// ===== COMPREHENSIVE LOGGING =====
 	UE_LOG(LogTemp, Warning, TEXT("========================================"));

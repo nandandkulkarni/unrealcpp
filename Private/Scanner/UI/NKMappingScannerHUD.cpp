@@ -131,12 +131,110 @@ void ANKMappingScannerHUD::DrawLeftSideInfo(float& YPos)
 	// ===== DISCOVERY PROGRESS (only when discovering) =====
 	if (MappingCamera->IsDiscovering())
 	{
-		DrawLine(TEXT("DISCOVERY:"), YPos, HUDColors::Header);
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		DrawLine(TEXT("DISCOVERY"), YPos, HUDColors::Header);
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		
 		DrawLine(FString::Printf(TEXT("• Shot %d | Angle %.1f°"), 
 			MappingCamera->GetDiscoveryShotCount(),
 			MappingCamera->GetDiscoveryAngle()), YPos, HUDColors::Warning);
 		DrawLine(FString::Printf(TEXT("• Progress: %.1f%% of 360° sweep"), 
 			MappingCamera->GetDiscoveryProgress()), YPos, HUDColors::Progress);
+		
+		YPos += LineHeight * 0.3f;
+		
+		// Legend for discovery visualization
+		DrawLine(TEXT("LEGEND:"), YPos, HUDColors::SubText);
+		DrawLine(TEXT("  🟢 Green Lines  = Hit target"), YPos, FLinearColor::Green);
+		DrawLine(TEXT("  🔴 Red Lines    = Missed"), YPos, FLinearColor::Red);
+		DrawLine(TEXT("  🟡 Yellow Dots  = Hit points"), YPos, FLinearColor::Yellow);
+		
+		YPos += LineHeight * 0.5f;
+	}
+	
+	// ===== DISCOVERY COMPLETE SUMMARY (only when discovered) =====
+	if (MappingCamera->GetScannerState() == EMappingScannerState::Discovered)
+	{
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		DrawLine(TEXT("✅ DISCOVERY COMPLETE"), YPos, HUDColors::Success);
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		
+		DrawLine(FString::Printf(TEXT("• Total Shots: %d"), 
+			MappingCamera->GetDiscoveryShotCount()), YPos, HUDColors::Info);
+		DrawLine(FString::Printf(TEXT("• First Hit Angle: %.1f°"), 
+			MappingCamera->GetFirstHitAngle()), YPos, HUDColors::Success);
+		DrawLine(TEXT("• Ready for Mapping ✓"), YPos, HUDColors::Progress);
+		
+		YPos += LineHeight * 0.3f;
+		
+		// Show legend for what was drawn
+		DrawLine(TEXT("VISUALIZATION:"), YPos, HUDColors::SubText);
+		DrawLine(TEXT("  🟢 Green Lines  = Successful hits"), YPos, FLinearColor::Green);
+		DrawLine(TEXT("  🔴 Red Lines    = Misses"), YPos, FLinearColor::Red);
+		DrawLine(TEXT("  🟡 Yellow Dots  = Hit points (15cm)"), YPos, FLinearColor::Yellow);
+		
+		YPos += LineHeight * 0.5f;
+	}
+	
+	// ===== MAPPING PROGRESS (only when mapping) =====
+	if (MappingCamera->GetScannerState() == EMappingScannerState::Mapping)
+	{
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		DrawLine(TEXT("MAPPING"), YPos, HUDColors::Header);
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		
+		DrawLine(FString::Printf(TEXT("• Shot %d | Hits %d"), 
+			MappingCamera->GetMappingShotCount(),
+			MappingCamera->GetMappingHitCount()), YPos, HUDColors::Success);
+		DrawLine(FString::Printf(TEXT("• Angle: %.1f°"), 
+			MappingCamera->GetMappingAngle()), YPos, HUDColors::Warning);
+		DrawLine(FString::Printf(TEXT("• Progress: %.1f%% of 360° orbit"), 
+			MappingCamera->GetMappingProgress()), YPos, HUDColors::Progress);
+		
+		// Calculate hit rate
+		int32 ShotCount = MappingCamera->GetMappingShotCount();
+		int32 HitCount = MappingCamera->GetMappingHitCount();
+		float HitRate = ShotCount > 0 ? (HitCount / (float)ShotCount * 100.0f) : 0.0f;
+		DrawLine(FString::Printf(TEXT("• Hit Rate: %.1f%%"), HitRate), YPos, HUDColors::Info);
+		
+		YPos += LineHeight * 0.3f;
+		
+		// Legend for mapping visualization
+		DrawLine(TEXT("LEGEND:"), YPos, HUDColors::SubText);
+		DrawLine(TEXT("  🟢 Green Lines  = Hit target"), YPos, FLinearColor::Green);
+		DrawLine(TEXT("  🔴 Red Lines    = Missed"), YPos, FLinearColor::Red);
+		DrawLine(TEXT("  🟡 Yellow Dots  = Hit points (15cm)"), YPos, FLinearColor::Yellow);
+		DrawLine(TEXT("  🔵 Cyan Dots    = Camera orbit path (30cm)"), YPos, FLinearColor(0.0f, 1.0f, 1.0f)); // Cyan
+		
+		YPos += LineHeight * 0.5f;
+	}
+	
+	// ===== MAPPING COMPLETE SUMMARY (only when complete) =====
+	if (MappingCamera->GetScannerState() == EMappingScannerState::Complete)
+	{
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		DrawLine(TEXT("✅ MAPPING COMPLETE"), YPos, HUDColors::Success);
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		
+		DrawLine(FString::Printf(TEXT("• Total Shots: %d"), 
+			MappingCamera->GetMappingShotCount()), YPos, HUDColors::Info);
+		DrawLine(FString::Printf(TEXT("• Total Hits: %d"), 
+			MappingCamera->GetMappingHitCount()), YPos, HUDColors::Success);
+		
+		// Calculate hit rate
+		int32 ShotCount = MappingCamera->GetMappingShotCount();
+		int32 HitCount = MappingCamera->GetMappingHitCount();
+		float HitRate = ShotCount > 0 ? (HitCount / (float)ShotCount * 100.0f) : 0.0f;
+		DrawLine(FString::Printf(TEXT("• Hit Rate: %.1f%%"), HitRate), YPos, 
+			HitRate > 90.0f ? HUDColors::Success : HUDColors::Warning);
+		
+		YPos += LineHeight * 0.3f;
+		
+		// Show legend for what was drawn
+		DrawLine(TEXT("VISUALIZATION:"), YPos, HUDColors::SubText);
+		DrawLine(TEXT("  🟢 Green Lines  = Successful orbit shots"), YPos, FLinearColor::Green);
+		DrawLine(TEXT("  🟡 Yellow Dots  = Hit points on target"), YPos, FLinearColor::Yellow);
+		
 		YPos += LineHeight * 0.5f;
 	}
 	

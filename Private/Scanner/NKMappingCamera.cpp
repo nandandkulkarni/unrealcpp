@@ -4,6 +4,8 @@
 #include "Scanner/Components/NKTargetFinderComponent.h"
 #include "Scanner/Components/NKLaserTracerComponent.h"
 #include "Scanner/Components/NKCameraControllerComponent.h"
+#include "Scanner/Components/NKTerrainMapperComponent.h"
+#include "Scanner/Components/NKOrbitMapperComponent.h"
 #include "Scanner/NKOverheadCamera.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -22,6 +24,8 @@ ANKMappingCamera::ANKMappingCamera(const FObjectInitializer& ObjectInitializer)
 	TargetFinderComponent = CreateDefaultSubobject<UNKTargetFinderComponent>(TEXT("TargetFinderComponent"));
 	LaserTracerComponent = CreateDefaultSubobject<UNKLaserTracerComponent>(TEXT("LaserTracerComponent"));
 	CameraControllerComponent = CreateDefaultSubobject<UNKCameraControllerComponent>(TEXT("CameraControllerComponent"));
+	TerrainMapperComponent = CreateDefaultSubobject<UNKTerrainMapperComponent>(TEXT("TerrainMapperComponent"));
+	OrbitMapperComponent = CreateDefaultSubobject<UNKOrbitMapperComponent>(TEXT("OrbitMapperComponent"));
 }
 
 void ANKMappingCamera::PostInitializeComponents()
@@ -53,6 +57,13 @@ void ANKMappingCamera::BeginPlay()
 	{
 		TargetFinderComponent->GetOnTargetFoundEvent().AddDynamic(this, &ANKMappingCamera::OnTargetFound);
 		TargetFinderComponent->GetOnDiscoveryFailedEvent().AddDynamic(this, &ANKMappingCamera::OnDiscoveryFailed);
+	}
+	
+	// Bind to orbit mapper events
+	if (OrbitMapperComponent)
+	{
+		OrbitMapperComponent->OnMappingComplete.AddDynamic(this, &ANKMappingCamera::OnMappingComplete);
+		OrbitMapperComponent->OnMappingFailed.AddDynamic(this, &ANKMappingCamera::OnMappingFailed);
 	}
 	
 	// Spawn overhead camera if enabled
@@ -413,6 +424,11 @@ void ANKMappingCamera::Stop()
 		TargetFinderComponent->StopDiscovery();
 		TransitionToState(EMappingScannerState::DiscoveryCancelled);
 	}
+	else if (OrbitMapperComponent && CurrentState == EMappingScannerState::Mapping)
+	{
+		OrbitMapperComponent->StopMapping();
+		UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera: Mapping stopped"));
+	}
 }
 
 void ANKMappingCamera::ClearDiscoveryLines()
@@ -420,7 +436,7 @@ void ANKMappingCamera::ClearDiscoveryLines()
 	if (LaserTracerComponent)
 	{
 		LaserTracerComponent->ClearLaserVisuals();
-		UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera: Discovery lines cleared"));
+		UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera: Discovery lines cleared (configuration preserved)"));
 	}
 }
 
@@ -440,8 +456,14 @@ void ANKMappingCamera::StartMapping()
 		return;
 	}
 	
+	if (!OrbitMapperComponent || !LaserTracerComponent)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ANKMappingCamera::StartMapping - Missing required components!"));
+		return;
+	}
+	
 	UE_LOG(LogTemp, Warning, TEXT("========================================"));
-	UE_LOG(LogTemp, Warning, TEXT("Starting Mapping Phase"));
+	UE_LOG(LogTemp, Warning, TEXT("Starting ASYNC Mapping Phase"));
 	UE_LOG(LogTemp, Warning, TEXT("========================================"));
 	UE_LOG(LogTemp, Warning, TEXT("REUSING DISCOVERY CONFIGURATION:"));
 	UE_LOG(LogTemp, Warning, TEXT("  Target: %s"), *DiscoveryConfig.TargetActor->GetName());
@@ -464,11 +486,40 @@ void ANKMappingCamera::StartMapping()
 		UE_LOG(LogTemp, Warning, TEXT("Laser tracer configured with proven settings"));
 	}
 	
-	// TODO: Implement actual mapping logic here
-	// For now, just transition to mapping state
+	// Calculate orbit parameters
+	FVector TargetCenter = DiscoveryConfig.TargetBounds.GetCenter();
+	FVector OrbitCenter = FVector(TargetCenter.X, TargetCenter.Y, DiscoveryConfig.ScanHeight);
+	
+	// Calculate orbit radius from discovery first hit
+	float OrbitRadius = FVector::Dist2D(DiscoveryConfig.CameraPositionAtHit, TargetCenter);
+	
+	UE_LOG(LogTemp, Warning, TEXT("ORBIT MAPPING CONFIGURATION:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Orbit Center: (%.2f, %.2f, %.2f) m"),
+		OrbitCenter.X/100.0f, OrbitCenter.Y/100.0f, OrbitCenter.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Orbit Radius: %.2f m"), OrbitRadius/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Start Angle: %.1f°"), DiscoveryConfig.FirstHitAngle);
+	UE_LOG(LogTemp, Warning, TEXT("  Angular Step: %.1f°"), OrbitMapperComponent->AngularStepDegrees);
+	
+	// Configure and start orbit mapper
+	OrbitMapperComponent->AngularStepDegrees = 5.0f;  // 5 degrees per step
+	OrbitMapperComponent->ShotDelay = 0.0f;  // Shoot every tick
+	OrbitMapperComponent->bDrawDebugVisuals = true;
+	
+	OrbitMapperComponent->StartMapping(
+		DiscoveryConfig.TargetActor,
+		OrbitCenter,
+		OrbitRadius,
+		DiscoveryConfig.ScanHeight,
+		DiscoveryConfig.FirstHitAngle,
+		LaserTracerComponent
+	);
+	
+	// Transition to mapping state
 	TransitionToState(EMappingScannerState::Mapping);
 	
-	UE_LOG(LogTemp, Warning, TEXT("Mapping phase ready (implementation pending)"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("Async Orbit Mapping Started!"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
 }
 
 int32 ANKMappingCamera::GetDiscoveryShotCount() const
@@ -484,6 +535,26 @@ float ANKMappingCamera::GetDiscoveryAngle() const
 float ANKMappingCamera::GetDiscoveryProgress() const
 {
 	return TargetFinderComponent ? TargetFinderComponent->GetProgressPercent() : 0.0f;
+}
+
+int32 ANKMappingCamera::GetMappingShotCount() const
+{
+	return OrbitMapperComponent ? OrbitMapperComponent->GetShotCount() : 0;
+}
+
+float ANKMappingCamera::GetMappingAngle() const
+{
+	return OrbitMapperComponent ? OrbitMapperComponent->GetCurrentAngle() : 0.0f;
+}
+
+float ANKMappingCamera::GetMappingProgress() const
+{
+	return OrbitMapperComponent ? OrbitMapperComponent->GetProgressPercent() : 0.0f;
+}
+
+int32 ANKMappingCamera::GetMappingHitCount() const
+{
+	return OrbitMapperComponent ? OrbitMapperComponent->GetHitCount() : 0;
 }
 
 void ANKMappingCamera::OnTargetFound(FHitResult HitResult)
@@ -550,6 +621,28 @@ void ANKMappingCamera::OnDiscoveryFailed()
 	UE_LOG(LogTemp, Error, TEXT("ANKMappingCamera: Discovery failed - no target found"));
 	
 	TransitionToState(EMappingScannerState::DiscoveryFailed);
+}
+
+void ANKMappingCamera::OnMappingComplete()
+{
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("ANKMappingCamera::OnMappingComplete CALLED"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+	UE_LOG(LogTemp, Warning, TEXT("  Total Shots: %d"), GetMappingShotCount());
+	UE_LOG(LogTemp, Warning, TEXT("  Total Hits: %d"), GetMappingHitCount());
+	
+	TransitionToState(EMappingScannerState::Complete);
+	
+	UE_LOG(LogTemp, Warning, TEXT("  State transitioned to Complete"));
+	UE_LOG(LogTemp, Warning, TEXT("========================================"));
+}
+
+void ANKMappingCamera::OnMappingFailed()
+{
+	UE_LOG(LogTemp, Error, TEXT("ANKMappingCamera: Mapping failed"));
+	
+	// Could add a MappingFailed state if needed
+	TransitionToState(EMappingScannerState::Idle);
 }
 
 void ANKMappingCamera::TransitionToState(EMappingScannerState NewState)

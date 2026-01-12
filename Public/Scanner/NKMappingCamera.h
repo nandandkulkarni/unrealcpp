@@ -4,12 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "CineCameraActor.h"
+#include "Scanner/ScanDataStructures.h"
 #include "NKMappingCamera.generated.h"
 
 // Forward declarations
 class UNKTargetFinderComponent;
 class UNKLaserTracerComponent;
 class UNKCameraControllerComponent;
+class UNKTerrainMapperComponent;
+class UNKOrbitMapperComponent;
 class ANKOverheadCamera;
 
 // Scanner state
@@ -85,7 +88,7 @@ struct FDiscoveryConfiguration
 	// Validation
 	bool IsValid() const
 	{
-		return TargetActor != nullptr && OrbitRadius > 0.0f;
+		return TargetActor != nullptr;  // OrbitRadius not needed - calculated during mapping
 	}
 };
 
@@ -134,11 +137,30 @@ public:
 	// ===== Overhead Camera =====
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Overhead Camera")
-	bool bSpawnOverheadCamera = true;
+	bool bSpawnOverheadCamera = false;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Overhead Camera", 
-		meta = (ClampMin = "1"))
-	float OverheadCameraHeightMeters = 50.0f;
+		meta = (EditCondition = "bSpawnOverheadCamera", EditConditionHides))
+	float OverheadCameraHeightMeters = 100.0f;
+	
+	// ===== Mapping Settings =====
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Mapping")
+	EMappingMode MappingMode = EMappingMode::Orbit;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Mapping",
+		meta = (ClampMin = "0.1", ClampMax = "50.0"))
+	float OrbitStepSizeMeters = 10.0f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Mapping")
+	EOrbitDirection OrbitDirection = EOrbitDirection::CounterClockwise;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Mapping",
+		meta = (ClampMin = "50", ClampMax = "1000"))
+	float OrbitLaserShotIntervalMs = 100.0f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scanner Settings|Mapping")
+	FLinearColor OrbitLaserColor = FLinearColor::Blue;
 	
 	// ===== High-Level Control =====
 	
@@ -183,6 +205,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Scanner|Discovery")
 	float GetDiscoveryProgress() const;
 	
+	// ===== Mapping Progress (Available during Mapping state) =====
+	
+	UFUNCTION(BlueprintPure, Category = "Scanner|Mapping")
+	int32 GetMappingShotCount() const;
+	
+	UFUNCTION(BlueprintPure, Category = "Scanner|Mapping")
+	float GetMappingAngle() const;
+	
+	UFUNCTION(BlueprintPure, Category = "Scanner|Mapping")
+	float GetMappingProgress() const;
+	
+	UFUNCTION(BlueprintPure, Category = "Scanner|Mapping")
+	int32 GetMappingHitCount() const;
+	
 	// ===== First Hit Data (Available after Discovered state) =====
 	
 	UFUNCTION(BlueprintPure, Category = "Scanner|Discovery")
@@ -221,6 +257,12 @@ private:
 	UNKCameraControllerComponent* CameraControllerComponent;
 	
 	UPROPERTY()
+	UNKTerrainMapperComponent* TerrainMapperComponent;
+	
+	UPROPERTY()
+	UNKOrbitMapperComponent* OrbitMapperComponent;
+	
+	UPROPERTY()
 	ANKOverheadCamera* OverheadCameraActor;  // Spawned overhead camera
 	
 	// ===== State =====
@@ -247,6 +289,12 @@ private:
 	UFUNCTION()
 	void OnDiscoveryFailed();
 	
+	UFUNCTION()
+	void OnMappingComplete();
+	
+	UFUNCTION()
+	void OnMappingFailed();
+
 	// ===== Internal Methods =====
 	
 	void TransitionToState(EMappingScannerState NewState);

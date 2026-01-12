@@ -21,7 +21,6 @@ public:
 protected:
 	virtual void PostInitializeComponents() override;
 	virtual void BeginPlay() override;
-	virtual void Tick(float DeltaTime) override;
 
 public:
 	// ===== Configuration =====
@@ -44,12 +43,6 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Observer Camera")
 	bool bAutoPositionOnBeginPlay = true;
-	
-	/**
-	 * Continuously update position if target moves
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Observer Camera")
-	bool bTrackTargetMovement = false;
 	
 	/**
 	 * Camera pitch angle (0 = horizontal, -90 = straight down)
@@ -81,10 +74,6 @@ public:
 	float CalculateOptimalHeight() const;
 
 private:
-	FVector LastTargetCenter;
-	float UpdateCheckInterval = 0.5f;  // Check for movement every 0.5 seconds
-	float TimeSinceLastCheck = 0.0f;
-	
 	/**
 	 * Wide-angle FOV for Observer Camera (in degrees)
 	 * 90° is a good balance between coverage and minimal distortion

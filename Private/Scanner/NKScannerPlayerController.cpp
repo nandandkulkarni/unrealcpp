@@ -294,35 +294,38 @@ void ANKScannerPlayerController::PerformCameraSwitch(AActor* NewCamera)
 	
 	AActor* OldCamera = GetViewTarget();
 	
+	// Get positions in meters for better readability
+	FVector OldPos = OldCamera ? OldCamera->GetActorLocation() / 100.0f : FVector::ZeroVector;
+	FVector NewPos = NewCamera->GetActorLocation() / 100.0f;
+	FRotator OldRot = OldCamera ? OldCamera->GetActorRotation() : FRotator::ZeroRotator;
+	FRotator NewRot = NewCamera->GetActorRotation();
+	
 	UE_LOG(LogTemp, Warning, TEXT("╔═══════════════════════════════════════════════════════╗"));
 	UE_LOG(LogTemp, Warning, TEXT("║ CAMERA SWITCH                                         ║"));
 	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
-	UE_LOG(LogTemp, Warning, TEXT("║ FROM: %s"), OldCamera ? *OldCamera->GetName() : TEXT("NULL"));
 	if (OldCamera)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("║   Location: %s"), *OldCamera->GetActorLocation().ToString());
-		UE_LOG(LogTemp, Warning, TEXT("║   Rotation: %s"), *OldCamera->GetActorRotation().ToString());
+		UE_LOG(LogTemp, Warning, TEXT("║ FROM: %s"), *OldCamera->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("║   Position: (%.2f, %.2f, %.2f) m"), OldPos.X, OldPos.Y, OldPos.Z);
+		UE_LOG(LogTemp, Warning, TEXT("║   Rotation: P=%.2f° Y=%.2f° R=%.2f°"), OldRot.Pitch, OldRot.Yaw, OldRot.Roll);
 	}
 	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
 	UE_LOG(LogTemp, Warning, TEXT("║ TO:   %s"), *NewCamera->GetName());
-	UE_LOG(LogTemp, Warning, TEXT("║   Location: %s"), *NewCamera->GetActorLocation().ToString());
-	UE_LOG(LogTemp, Warning, TEXT("║   Rotation: %s"), *NewCamera->GetActorRotation().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("║   Position: (%.2f, %.2f, %.2f) m"), NewPos.X, NewPos.Y, NewPos.Z);
+	UE_LOG(LogTemp, Warning, TEXT("║   Rotation: P=%.2f° Y=%.2f° R=%.2f°"), NewRot.Pitch, NewRot.Yaw, NewRot.Roll);
 	UE_LOG(LogTemp, Warning, TEXT("║   Class: %s"), *NewCamera->GetClass()->GetName());
 	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
 	
 	// Smooth blend to new camera
 	SetViewTargetWithBlend(NewCamera, CameraBlendTime);
 	
-	// Log what the view target actually is after the blend is initiated
-	UE_LOG(LogTemp, Warning, TEXT("╔═══════════════════════════════════════════════════════╗"));
-	UE_LOG(LogTemp, Warning, TEXT("║ VIEW TARGET VERIFICATION (after blend started)        ║"));
-	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	// Log verification
 	AActor* ActualViewTarget = GetViewTarget();
-	UE_LOG(LogTemp, Warning, TEXT("║ GetViewTarget() returns: %s"), ActualViewTarget ? *ActualViewTarget->GetName() : TEXT("NULL"));
-	UE_LOG(LogTemp, Warning, TEXT("║ Requested target was:    %s"), *NewCamera->GetName());
-	UE_LOG(LogTemp, Warning, TEXT("║ Match? %s"), ActualViewTarget == NewCamera ? TEXT("YES ✅") : TEXT("NO ❌ - BLEND IN PROGRESS"));
-	UE_LOG(LogTemp, Warning, TEXT("║ Blend Time: %.2f seconds"), CameraBlendTime);
-	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
+	UE_LOG(LogTemp, Warning, TEXT("View Target Verification:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Requested: %s"), *NewCamera->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("  Actual: %s"), ActualViewTarget ? *ActualViewTarget->GetName() : TEXT("NULL"));
+	UE_LOG(LogTemp, Warning, TEXT("  Match: %s"), ActualViewTarget == NewCamera ? TEXT("YES ✅") : TEXT("NO ❌ (blend in progress)"));
+	UE_LOG(LogTemp, Warning, TEXT("  Blend Time: %.2f seconds"), CameraBlendTime);
 }
 
 void ANKScannerPlayerController::SetupInputComponent()
