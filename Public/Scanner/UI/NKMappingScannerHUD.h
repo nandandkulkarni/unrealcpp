@@ -119,6 +119,7 @@ private:
 	
 	FSimpleHUDButton StartDiscoveryButton;
 	FSimpleHUDButton ClearLinesButton;
+	FSimpleHUDButton ShootLaserButton;
 	
 	// Dynamic camera buttons (created based on available cameras)
 	TArray<FSimpleHUDButton> CameraButtons;

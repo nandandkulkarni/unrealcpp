@@ -145,6 +145,12 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Camera")
 	FString GetCurrentCameraName() const;
+	
+	/**
+	 * Shoot a laser straight from the active camera
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera")
+	void ShootLaserFromCamera();
 
 private:
 	// ===== Camera Data =====
@@ -155,7 +161,7 @@ private:
 	int32 CurrentCameraIndex;
 	
 	UPROPERTY(EditAnywhere, Category = "Camera")
-	float CameraBlendTime = 0.5f;
+	float CameraBlendTime = 0.0f;  // Instant switch, no blend
 	
 	UPROPERTY(EditAnywhere, Category = "Camera")
 	float YawRotationSpeed = 5.0f;  // Degrees per key press

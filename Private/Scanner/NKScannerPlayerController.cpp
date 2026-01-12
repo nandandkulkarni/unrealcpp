@@ -312,6 +312,17 @@ void ANKScannerPlayerController::PerformCameraSwitch(AActor* NewCamera)
 	
 	// Smooth blend to new camera
 	SetViewTargetWithBlend(NewCamera, CameraBlendTime);
+	
+	// Log what the view target actually is after the blend is initiated
+	UE_LOG(LogTemp, Warning, TEXT("╔═══════════════════════════════════════════════════════╗"));
+	UE_LOG(LogTemp, Warning, TEXT("║ VIEW TARGET VERIFICATION (after blend started)        ║"));
+	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	AActor* ActualViewTarget = GetViewTarget();
+	UE_LOG(LogTemp, Warning, TEXT("║ GetViewTarget() returns: %s"), ActualViewTarget ? *ActualViewTarget->GetName() : TEXT("NULL"));
+	UE_LOG(LogTemp, Warning, TEXT("║ Requested target was:    %s"), *NewCamera->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("║ Match? %s"), ActualViewTarget == NewCamera ? TEXT("YES ✅") : TEXT("NO ❌ - BLEND IN PROGRESS"));
+	UE_LOG(LogTemp, Warning, TEXT("║ Blend Time: %.2f seconds"), CameraBlendTime);
+	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
 }
 
 void ANKScannerPlayerController::SetupInputComponent()
@@ -602,4 +613,133 @@ void ANKScannerPlayerController::SpawnObserverCamera()
 	{
 		UE_LOG(LogTemp, Error, TEXT("ScannerPlayerController: Failed to spawn Observer Camera!"));
 	}
+}
+
+void ANKScannerPlayerController::ShootLaserFromCamera()
+{
+	AActor* ViewTarget = GetViewTarget();
+	if (!ViewTarget || !GetWorld())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("🔫 Cannot shoot laser - no active camera or world"));
+		return;
+	}
+	
+	// Get camera location and forward vector
+	FVector CameraLocation = ViewTarget->GetActorLocation();
+	FVector CameraForward = ViewTarget->GetActorForwardVector();
+	
+	// Shoot a very long ray (10km = 1,000,000 cm)
+	float LaserRange = 1000000.0f;
+	FVector LaserEnd = CameraLocation + (CameraForward * LaserRange);
+	
+	// Perform line trace
+	FHitResult HitResult;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(ViewTarget);  // Don't hit the camera itself
+	QueryParams.bTraceComplex = true;
+	
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		HitResult,
+		CameraLocation,
+		LaserEnd,
+		ECC_Visibility,
+		QueryParams
+	);
+	
+	// Determine actual laser end point
+	FVector ActualLaserEnd = bHit ? HitResult.Location : LaserEnd;
+	
+	// Draw persistent laser line (RED, very thick, never disappears)
+	DrawDebugLine(
+		GetWorld(),
+		CameraLocation,
+		ActualLaserEnd,
+		FColor::Red,
+		true,           // Persistent
+		-1.0f,          // Infinite lifetime
+		0,
+		10.0f           // Very thick line
+	);
+	
+	// Draw a 10cm × 10cm square at the hit point if we hit something
+	if (bHit)
+	{
+		// Draw a flat square on the hit surface
+		FVector HitLocation = HitResult.Location;
+		FVector HitNormal = HitResult.ImpactNormal;
+		
+		// Create a coordinate system on the hit surface
+		// Use the impact normal as the "up" direction for the square
+		FVector Tangent1 = FVector::CrossProduct(HitNormal, FVector::UpVector);
+		if (Tangent1.SizeSquared() < 0.001f)  // If normal is parallel to up vector
+		{
+			Tangent1 = FVector::CrossProduct(HitNormal, FVector::ForwardVector);
+		}
+		Tangent1.Normalize();
+		FVector Tangent2 = FVector::CrossProduct(HitNormal, Tangent1);
+		Tangent2.Normalize();
+		
+		// 10cm square = 5cm from center to edge
+		float HalfSize = 5.0f;  // 5cm
+		
+		// Calculate the 4 corners of the square
+		FVector Corner1 = HitLocation + (Tangent1 * HalfSize) + (Tangent2 * HalfSize);
+		FVector Corner2 = HitLocation - (Tangent1 * HalfSize) + (Tangent2 * HalfSize);
+		FVector Corner3 = HitLocation - (Tangent1 * HalfSize) - (Tangent2 * HalfSize);
+		FVector Corner4 = HitLocation + (Tangent1 * HalfSize) - (Tangent2 * HalfSize);
+		
+		// Draw the 4 edges of the square
+		DrawDebugLine(GetWorld(), Corner1, Corner2, FColor::Yellow, true, -1.0f, 0, 3.0f);
+		DrawDebugLine(GetWorld(), Corner2, Corner3, FColor::Yellow, true, -1.0f, 0, 3.0f);
+		DrawDebugLine(GetWorld(), Corner3, Corner4, FColor::Yellow, true, -1.0f, 0, 3.0f);
+		DrawDebugLine(GetWorld(), Corner4, Corner1, FColor::Yellow, true, -1.0f, 0, 3.0f);
+		
+		// Draw diagonals for better visibility
+		DrawDebugLine(GetWorld(), Corner1, Corner3, FColor::Orange, true, -1.0f, 0, 2.0f);
+		DrawDebugLine(GetWorld(), Corner2, Corner4, FColor::Orange, true, -1.0f, 0, 2.0f);
+	}
+	
+	// Comprehensive logging
+	UE_LOG(LogTemp, Warning, TEXT("╔═══════════════════════════════════════════════════════╗"));
+	UE_LOG(LogTemp, Warning, TEXT("║ 🔫 LASER SHOT FROM CAMERA                             ║"));
+	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	UE_LOG(LogTemp, Warning, TEXT("║ Camera: %s"), *ViewTarget->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("║ Camera Type: %s"), *ViewTarget->GetClass()->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("║ Start Position: %s"), *CameraLocation.ToString());
+	UE_LOG(LogTemp, Warning, TEXT("║   (%.2f, %.2f, %.2f) m"), 
+		CameraLocation.X/100.0f, CameraLocation.Y/100.0f, CameraLocation.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("║ Forward Vector: (%.3f, %.3f, %.3f)"), 
+		CameraForward.X, CameraForward.Y, CameraForward.Z);
+	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	
+	if (bHit)
+	{
+		AActor* HitActor = HitResult.GetActor();
+		UE_LOG(LogTemp, Warning, TEXT("║ HIT: YES ✅"));
+		UE_LOG(LogTemp, Warning, TEXT("║ Hit Actor: %s"), HitActor ? *HitActor->GetName() : TEXT("None"));
+		UE_LOG(LogTemp, Warning, TEXT("║ Hit Component: %s"), 
+			HitResult.Component.IsValid() ? *HitResult.Component->GetName() : TEXT("None"));
+		UE_LOG(LogTemp, Warning, TEXT("║ Hit Location: %s"), *HitResult.Location.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("║   (%.2f, %.2f, %.2f) m"), 
+			HitResult.Location.X/100.0f, HitResult.Location.Y/100.0f, HitResult.Location.Z/100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("║ Distance: %.2f cm (%.2f m)"), HitResult.Distance, HitResult.Distance/100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("║ Impact Normal: (%.3f, %.3f, %.3f)"), 
+			HitResult.ImpactNormal.X, HitResult.ImpactNormal.Y, HitResult.ImpactNormal.Z);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("║ HIT: NO ❌ (shot into void)"));
+		UE_LOG(LogTemp, Warning, TEXT("║ Laser traveled: %.2f m"), LaserRange/100.0f);
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("╠═══════════════════════════════════════════════════════╣"));
+	UE_LOG(LogTemp, Warning, TEXT("║ VISUALIZATION:"));
+	UE_LOG(LogTemp, Warning, TEXT("║ • Red line drawn from camera to %s"), bHit ? TEXT("hit point") : TEXT("max range"));
+	if (bHit)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("║ • Yellow 10cm × 10cm square at hit point"));
+		UE_LOG(LogTemp, Warning, TEXT("║ • Orange diagonal cross inside square"));
+	}
+	UE_LOG(LogTemp, Warning, TEXT("║ • Lines are PERSISTENT (never disappear)"));
+	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
 }

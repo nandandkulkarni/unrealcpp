@@ -3,6 +3,7 @@
 #include "Scanner/NKObserverCamera.h"
 #include "DrawDebugHelpers.h"
 #include "CineCameraComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 ANKObserverCamera::ANKObserverCamera(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -317,6 +318,19 @@ void ANKObserverCamera::PositionAboveTarget()
 	float BoundingSphereRadius = TargetExtent.Size();  // 3D diagonal distance from center to corner
 	float HorizontalRadius = FVector2D(TargetExtent.X, TargetExtent.Y).Size();  // 2D horizontal radius
 	
+	// Log bounding box center and extents (for circle placement verification)
+	UE_LOG(LogTemp, Warning, TEXT("BOUNDING BOX CENTER & EXTENTS:"));
+	UE_LOG(LogTemp, Warning, TEXT("  Center (World XY): X=%.2f m, Y=%.2f m"), 
+		TargetCenter.X/100.0f, TargetCenter.Y/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Extents (Half-Size): X=%.2f m, Y=%.2f m, Z=%.2f m"), 
+		TargetExtent.X/100.0f, TargetExtent.Y/100.0f, TargetExtent.Z/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Full Size: %.2f × %.2f × %.2f m"), 
+		(TargetMax.X - TargetMin.X)/100.0f, 
+		(TargetMax.Y - TargetMin.Y)/100.0f, 
+		(TargetMax.Z - TargetMin.Z)/100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  ⚠️  CIRCLES SHOULD BE CENTERED AT: (%.2f, %.2f)"), 
+		TargetCenter.X/100.0f, TargetCenter.Y/100.0f);
+	
 	// Calculate the orbit height (same as mapping camera scan height)
 	// Default to 50% of target height if not specified
 	float OrbitHeight = TargetCenter.Z;  // Use target center height as orbit level
@@ -358,59 +372,32 @@ void ANKObserverCamera::PositionAboveTarget()
 	
 	// Draw a large RED sphere at the CENTER TOP of the target to identify the center
 	// Place it at the target's highest point, not at Z=1m
-	FVector CenterMarker = FVector(TargetCenter.X, TargetCenter.Y, TargetMax.Z + 100.0f);  // 1m above target's highest point
+	// Only draw if we're NOT viewing from Observer Camera (would block the view)
+	APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	bool bIsActiveViewTarget = (PC && PC->GetViewTarget() == this);
 	
-	DrawDebugSphere(
-		GetWorld(),
-		CenterMarker,
-		300.0f,  // 3m radius sphere - very large to see from above
-		16,  // Segments
-		FColor::Red,
-		true,  // Persistent
-		-1.0f,  // Infinite lifetime
-		0,
-		10.0f  // Thick outline
-	);
-	
-	// Draw a cross at the center for extra visibility (also at top of target)
-	float CrossSize = 1000.0f;  // 10m long cross arms
-	FVector CrossCenter = FVector(TargetCenter.X, TargetCenter.Y, TargetMax.Z + 100.0f);
-	
-	// X-axis arm (red)
-	DrawDebugLine(
-		GetWorld(),
-		CrossCenter - FVector(CrossSize, 0, 0),
-		CrossCenter + FVector(CrossSize, 0, 0),
-		FColor::Red,
-		true,
-		-1.0f,
-		0,
-		20.0f  // Very thick
-	);
-	
-	// Y-axis arm (red)
-	DrawDebugLine(
-		GetWorld(),
-		CrossCenter - FVector(0, CrossSize, 0),
-		CrossCenter + FVector(0, CrossSize, 0),
-		FColor::Red,
-		true,
-		-1.0f,
-		0,
-		20.0f  // Very thick
-	);
-	
-	// Also draw a vertical line from ground to top of target for reference
-	DrawDebugLine(
-		GetWorld(),
-		FVector(TargetCenter.X, TargetCenter.Y, 0.0f),  // Ground level
-		FVector(TargetCenter.X, TargetCenter.Y, TargetMax.Z + 200.0f),  // 2m above target
-		FColor::Magenta,
-		true,
-		-1.0f,
-		0,
-		10.0f  // Thick line
-	);
+	if (!bIsActiveViewTarget)
+	{
+		FVector CenterMarker = FVector(TargetCenter.X, TargetCenter.Y, TargetMax.Z + 100.0f);  // 1m above target's highest point
+		
+		DrawDebugSphere(
+			GetWorld(),
+			CenterMarker,
+			50.0f,  // 0.5m radius sphere - much smaller!
+			16,  // Segments
+			FColor::Red,
+			true,  // Persistent
+			-1.0f,  // Infinite lifetime
+			0,
+			5.0f  // Outline thickness
+		);
+		
+		UE_LOG(LogTemp, Warning, TEXT("Red marker sphere drawn (0.5m radius) - not viewing from Observer"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Skipping red marker sphere - Observer Camera is active view"));
+	}
 	
 	UE_LOG(LogTemp, Warning, TEXT("DEBUG VISUALIZATION:"));
 	UE_LOG(LogTemp, Warning, TEXT("  Yellow sphere at observer position: (%.2f, %.2f, %.2f) m"), 

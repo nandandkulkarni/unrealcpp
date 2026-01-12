@@ -23,6 +23,11 @@ ANKMappingScannerHUD::ANKMappingScannerHUD()
 	ClearLinesButton.Size = FVector2D(200.0f, 40.0f);
 	ClearLinesButton.NormalColor = HUDColors::ButtonDelete;
 	ClearLinesButton.HoverColor = HUDColors::ButtonDeleteHover;
+	
+	ShootLaserButton.ButtonText = TEXT("🔫 Shoot Laser");
+	ShootLaserButton.Size = FVector2D(180.0f, 45.0f);
+	ShootLaserButton.NormalColor = FLinearColor(0.8f, 0.2f, 0.2f, 0.8f);  // Red
+	ShootLaserButton.HoverColor = FLinearColor(1.0f, 0.3f, 0.3f, 0.9f);   // Brighter red
 }
 
 void ANKMappingScannerHUD::BeginPlay()
@@ -186,7 +191,15 @@ void ANKMappingScannerHUD::DrawLeftSideInfo(float& YPos)
 		
 		FBox Bounds = MappingCamera->TargetActor->GetComponentsBoundingBox(true);
 		FVector Size = Bounds.GetSize();
-		DrawLine(FString::Printf(TEXT("• Size: %.1fm × %.1fm × %.1fm"), 
+		FVector Center = Bounds.GetCenter();
+		FVector Extent = Bounds.GetExtent();
+		
+		DrawLine(TEXT("• Bounding Box:"), YPos);
+		DrawLine(FString::Printf(TEXT("  Center (World): X=%.2f, Y=%.2f"), 
+			Center.X/100.0f, Center.Y/100.0f), YPos, HUDColors::Info);
+		DrawLine(FString::Printf(TEXT("  Extents: X=%.2f, Y=%.2f, Z=%.2f m"), 
+			Extent.X/100.0f, Extent.Y/100.0f, Extent.Z/100.0f), YPos, HUDColors::Info);
+		DrawLine(FString::Printf(TEXT("  Size: %.1f × %.1f × %.1f m"), 
 			Size.X/100.0f, Size.Y/100.0f, Size.Z/100.0f), YPos);
 		YPos += LineHeight * 0.5f;
 	}
@@ -296,8 +309,18 @@ void ANKMappingScannerHUD::DrawRightSideButtons()
 	AddHitBox(ClearLinesButton.Position, ClearLinesButton.Size,
 		FName("ClearLinesButton"), false, 0);
 	
+	// ===== SHOOT LASER BUTTON =====
+	ShootLaserButton.Position = FVector2D(
+		Canvas->SizeX - ShootLaserButton.Size.X - ButtonPadding,
+		ButtonPadding + StartDiscoveryButton.Size.Y + ClearLinesButton.Size.Y + (ButtonSpacing * 2)
+	);
+	
+	DrawButton(ShootLaserButton);
+	AddHitBox(ShootLaserButton.Position, ShootLaserButton.Size,
+		FName("ShootLaserButton"), false, 0);
+	
 	// ===== CAMERA BUTTONS (Dynamic) =====
-	float CurrentYPos = ButtonPadding + StartDiscoveryButton.Size.Y + ClearLinesButton.Size.Y + (ButtonSpacing * 2);
+	float CurrentYPos = ButtonPadding + StartDiscoveryButton.Size.Y + ClearLinesButton.Size.Y + ShootLaserButton.Size.Y + (ButtonSpacing * 3);
 	
 	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
 	int32 CurrentCameraIndex = ScannerPC ? ScannerPC->GetCurrentCameraIndex() : -1;
@@ -374,6 +397,7 @@ void ANKMappingScannerHUD::UpdateButtonHover()
 	
 	StartDiscoveryButton.bIsHovered = IsPointInButton(StartDiscoveryButton, MousePos);
 	ClearLinesButton.bIsHovered = IsPointInButton(ClearLinesButton, MousePos);
+	ShootLaserButton.bIsHovered = IsPointInButton(ShootLaserButton, MousePos);
 	
 	// Update hover for all camera buttons
 	for (FSimpleHUDButton& CameraButton : CameraButtons)
@@ -410,6 +434,21 @@ void ANKMappingScannerHUD::NotifyHitBoxClick(FName BoxName)
 	{
 		MappingCamera->ClearDiscoveryLines();
 		UE_LOG(LogTemp, Log, TEXT("HUD: Clear Discovery Lines button clicked"));
+	}
+	else if (BoxName == "ShootLaserButton")
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HUD: Shoot Laser button clicked"));
+		
+		// Call PlayerController to shoot laser from active camera
+		ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+		if (ScannerPC)
+		{
+			ScannerPC->ShootLaserFromCamera();
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("  PlayerController is not ANKScannerPlayerController!"));
+		}
 	}
 	else if (BoxName.ToString().StartsWith(TEXT("CameraButton_")))
 	{
