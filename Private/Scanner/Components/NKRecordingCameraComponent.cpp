@@ -3,6 +3,8 @@
 #include "Scanner/Components/NKRecordingCameraComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "DrawDebugHelpers.h"
+#include "CineCameraComponent.h"
+#include "CineCameraActor.h"
 
 UNKRecordingCameraComponent::UNKRecordingCameraComponent()
 {
@@ -61,6 +63,42 @@ void UNKRecordingCameraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	{
 		Owner->SetActorLocation(CameraPosition);
 		Owner->SetActorRotation(CameraRotation);
+		
+		// Apply dynamic focus if enabled
+		if (bEnableDynamicFocus)
+		{
+			if (ACineCameraActor* CineCameraActor = Cast<ACineCameraActor>(Owner))
+			{
+				if (UCineCameraComponent* CineCamera = CineCameraActor->GetCineCameraComponent())
+				{
+					// Determined focus target based on look mode
+					FVector FocusTarget;
+					
+					if (RecordingLookMode == ERecordingLookMode::Center)
+					{
+						// Focus on target center
+						FocusTarget = (RecordingTargetActor) ? RecordingTargetActor->GetActorLocation() : OrbitCenter;
+					}
+					else if (RecordingLookMode == ERecordingLookMode::LookAhead)
+					{
+						// Focus on look-ahead point
+						float LookAheadDist = CurrentDistance + RecordingLookAheadDistanceCm;
+						FocusTarget = GetInterpolatedPosition(LookAheadDist);
+					}
+					else // Perpendicular
+					{
+						// Focus on the surface point we are orbiting
+						FocusTarget = OrbitPoint;
+					}
+					
+					// Calculate distance to focus target
+					float FocusDist = FVector::Dist(CameraPosition, FocusTarget);
+					
+					// Apply to camera
+					CineCamera->FocusSettings.ManualFocusDistance = FocusDist;
+				}
+			}
+		}
 	}
 	
 	// 8. Draw debug visualization
@@ -120,6 +158,29 @@ void UNKRecordingCameraComponent::StartPlayback(const TArray<FVector>& InMapping
 	bIsPaused = false;
 	TimeSinceLastMovementLog = 0.0f;
 	SetComponentTickEnabled(true);
+	
+	// Apply camera settings for recording
+	AActor* Owner = GetOwner();
+	if (ACineCameraActor* CineCameraActor = Cast<ACineCameraActor>(Owner))
+	{
+		if (UCineCameraComponent* CineCamera = CineCameraActor->GetCineCameraComponent())
+		{
+			// Apply focal length
+			CineCamera->CurrentFocalLength = RecordingFocalLength;
+			
+			// Apply manual focus
+			CineCamera->FocusSettings.FocusMethod = ECameraFocusMethod::Manual;
+			CineCamera->FocusSettings.ManualFocusDistance = RecordingFocusDistance;
+			
+			// Apply aperture
+			CineCamera->CurrentAperture = RecordingAperture;
+			
+			UE_LOG(LogTemp, Warning, TEXT("  📷 Camera Settings Applied:"));
+			UE_LOG(LogTemp, Warning, TEXT("     Focal Length: %.1fmm"), RecordingFocalLength);
+			UE_LOG(LogTemp, Warning, TEXT("     Focus Distance: %.1fm (manual)"), RecordingFocusDistance / 100.0f);
+			UE_LOG(LogTemp, Warning, TEXT("     Aperture: f/%.1f"), RecordingAperture);
+		}
+	}
 	
 	UE_LOG(LogTemp, Warning, TEXT("???????????????????????????????????????????????????????"));
 	UE_LOG(LogTemp, Warning, TEXT("?? RECORDING CAMERA PLAYBACK STARTED"));

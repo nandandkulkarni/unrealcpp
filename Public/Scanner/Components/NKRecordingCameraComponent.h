@@ -94,6 +94,44 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback")
 	AActor* RecordingTargetActor;
 	
+	// ===== Camera Settings (Applied During Recording Only) =====
+	
+	/**
+	 * Focal length in millimeters for recording camera
+	 * Default: 28mm (wide-angle lens, good for scanning)
+	 * Range: 14mm (ultra-wide) to 50mm (standard)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Camera Settings",
+		meta = (ClampMin = "5.0", ClampMax = "200.0"))
+	float RecordingFocalLength = 28.0f;
+	
+	/**
+	 * Manual focus distance in cm for recording camera
+	 * Default: 100000cm (1000m, effectively infinite focus)
+	 * Use large value to keep everything in focus during scanning
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Camera Settings",
+		meta = (ClampMin = "100.0", ClampMax = "1000000.0"))
+	float RecordingFocusDistance = 100000.0f;
+	
+	/**
+	 * Aperture (f-stop) for recording camera
+	 * Default: 8.0 (large depth of field, everything in focus)
+	 * Higher values = more in focus, lower values = shallow depth of field
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Camera Settings",
+		meta = (ClampMin = "1.4", ClampMax = "22.0"))
+	float RecordingAperture = 8.0f;
+
+	/**
+	 * Enable dynamic focus distance during recording
+	 * If true, focus distance is updated every frame to match distance to target/surface
+	 * If false, uses fixed RecordingFocusDistance
+	 * Default: true
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Camera Settings")
+	bool bEnableDynamicFocus = true;
+	
 	// ===== Debug Visualization =====
 	
 	/**
