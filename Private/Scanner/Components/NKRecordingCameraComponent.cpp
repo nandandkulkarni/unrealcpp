@@ -25,12 +25,12 @@ void UNKRecordingCameraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	}
 	
 	// 1. Advance smoothly along path
-	CurrentDistance += (PlaybackSpeed * 100.0f) * DeltaTime;  // Convert m/s to cm/s
+	CurrentDistance += (RecordingPlaybackSpeed * 100.0f) * DeltaTime;  // Convert m/s to cm/s
 	
 	// 2. Handle looping or completion
 	if (CurrentDistance >= TotalPathLength)
 	{
-		if (bLoopPlayback)
+		if (bRecordingLoopPlayback)
 		{
 			CurrentDistance = FMath::Fmod(CurrentDistance, TotalPathLength);
 			UE_LOG(LogTemp, Log, TEXT("Recording playback looped"));
@@ -65,6 +65,38 @@ void UNKRecordingCameraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	
 	// 8. Draw debug visualization
 	DrawDebugVisualization(CameraPosition, OrbitPoint);
+	
+	// 9. Movement logging (if enabled)
+	if (bRecordingEnableMovementLogging)
+	{
+		TimeSinceLastMovementLog += DeltaTime;
+		
+		if (TimeSinceLastMovementLog >= RecordingMovementLogInterval)
+		{
+			TimeSinceLastMovementLog = 0.0f;
+			
+			float ProgressPercent = GetProgress() * 100.0f;
+			float DistanceMeters = CurrentDistance / 100.0f;
+			float PathLengthMeters = TotalPathLength / 100.0f;
+			
+			UE_LOG(LogTemp, Log, TEXT("???????????????????????????????????????????????????????"));
+			UE_LOG(LogTemp, Log, TEXT("? ?? RECORDING CAMERA MOVEMENT                        ?"));
+			UE_LOG(LogTemp, Log, TEXT("???????????????????????????????????????????????????????"));
+			UE_LOG(LogTemp, Log, TEXT("? Progress: %.1f%% (%.2fm / %.2fm)"), 
+				ProgressPercent, DistanceMeters, PathLengthMeters);
+			UE_LOG(LogTemp, Log, TEXT("? Speed: %.1f m/s"), RecordingPlaybackSpeed);
+			UE_LOG(LogTemp, Log, TEXT("? Camera Pos (m): (%.2f, %.2f, %.2f)"), 
+				CameraPosition.X/100.0f, CameraPosition.Y/100.0f, CameraPosition.Z/100.0f);
+			UE_LOG(LogTemp, Log, TEXT("? Orbit Point (m): (%.2f, %.2f, %.2f)"), 
+				OrbitPoint.X/100.0f, OrbitPoint.Y/100.0f, OrbitPoint.Z/100.0f);
+			UE_LOG(LogTemp, Log, TEXT("? Look Mode: %s"), 
+				RecordingLookMode == ERecordingLookMode::Perpendicular ? TEXT("Perpendicular") :
+				RecordingLookMode == ERecordingLookMode::Center ? TEXT("Center") : TEXT("Look-Ahead"));
+			UE_LOG(LogTemp, Log, TEXT("? Camera Rot: P=%.1f° Y=%.1f° R=%.1f°"), 
+				CameraRotation.Pitch, CameraRotation.Yaw, CameraRotation.Roll);
+			UE_LOG(LogTemp, Log, TEXT("???????????????????????????????????????????????????????"));
+		}
+	}
 }
 
 void UNKRecordingCameraComponent::StartPlayback(const TArray<FVector>& InMappingHitPoints)
@@ -86,6 +118,7 @@ void UNKRecordingCameraComponent::StartPlayback(const TArray<FVector>& InMapping
 	CurrentDistance = 0.0f;
 	bIsPlaying = true;
 	bIsPaused = false;
+	TimeSinceLastMovementLog = 0.0f;
 	SetComponentTickEnabled(true);
 	
 	UE_LOG(LogTemp, Warning, TEXT("???????????????????????????????????????????????????????"));
@@ -95,14 +128,14 @@ void UNKRecordingCameraComponent::StartPlayback(const TArray<FVector>& InMapping
 	UE_LOG(LogTemp, Warning, TEXT("  Path Length: %.2f meters"), TotalPathLength / 100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("  Orbit Center: (%.2f, %.2f, %.2f) m"), 
 		OrbitCenter.X/100.0f, OrbitCenter.Y/100.0f, OrbitCenter.Z/100.0f);
-	UE_LOG(LogTemp, Warning, TEXT("  Playback Speed: %.1f m/s"), PlaybackSpeed);
-	UE_LOG(LogTemp, Warning, TEXT("  Camera Offset: %.1f m"), OffsetDistanceCm / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Playback Speed: %.1f m/s"), RecordingPlaybackSpeed);
+	UE_LOG(LogTemp, Warning, TEXT("  Camera Offset: %.1f m"), RecordingOffsetDistanceCm / 100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("  Look Mode: %s"), 
-		LookMode == ERecordingLookMode::Perpendicular ? TEXT("Perpendicular") :
-		LookMode == ERecordingLookMode::Center ? TEXT("Center") : TEXT("Look-Ahead"));
-	UE_LOG(LogTemp, Warning, TEXT("  Loop Playback: %s"), bLoopPlayback ? TEXT("Yes") : TEXT("No"));
+		RecordingLookMode == ERecordingLookMode::Perpendicular ? TEXT("Perpendicular") :
+		RecordingLookMode == ERecordingLookMode::Center ? TEXT("Center") : TEXT("Look-Ahead"));
+	UE_LOG(LogTemp, Warning, TEXT("  Loop Playback: %s"), bRecordingLoopPlayback ? TEXT("Yes") : TEXT("No"));
 	UE_LOG(LogTemp, Warning, TEXT("  Estimated Duration: %.1f seconds"), 
-		TotalPathLength / (PlaybackSpeed * 100.0f));
+		TotalPathLength / (RecordingPlaybackSpeed * 100.0f));
 	UE_LOG(LogTemp, Warning, TEXT("???????????????????????????????????????????????????????"));
 }
 
@@ -158,14 +191,28 @@ FVector UNKRecordingCameraComponent::CalculateOrbitCenter() const
 	if (MappingHitPoints.Num() == 0)
 		return FVector::ZeroVector;
 	
-	// Simple average of all points (works for circular orbit)
+	// Calculate average position (2D - XY plane only, preserve original Z height)
 	FVector Sum = FVector::ZeroVector;
 	for (const FVector& Point : MappingHitPoints)
 	{
-		Sum += Point;
+		Sum.X += Point.X;
+		Sum.Y += Point.Y;
+		// Don't average Z - use first point's Z as reference height
 	}
 	
-	return Sum / MappingHitPoints.Num();
+	// Average X and Y, use first point's Z
+	FVector Center;
+	Center.X = Sum.X / MappingHitPoints.Num();
+	Center.Y = Sum.Y / MappingHitPoints.Num();
+	Center.Z = MappingHitPoints[0].Z;  // Use same height as hit points
+	
+	UE_LOG(LogTemp, Warning, TEXT("?? ORBIT CENTER FIX ACTIVE: Using 2D averaging (XY only, Z preserved)"));
+	UE_LOG(LogTemp, Warning, TEXT("   First hit point Z: %.2f m"), MappingHitPoints[0].Z / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("   Last hit point Z: %.2f m"), MappingHitPoints.Last().Z / 100.0f);
+	UE_LOG(LogTemp, Warning, TEXT("   Calculated center: (%.2f, %.2f, %.2f) m"), 
+		Center.X/100.0f, Center.Y/100.0f, Center.Z/100.0f);
+	
+	return Center;
 }
 
 FVector UNKRecordingCameraComponent::GetInterpolatedPosition(float DistanceAlongPath) const
@@ -235,17 +282,17 @@ FVector UNKRecordingCameraComponent::GetTangentAtDistance(float DistanceAlongPat
 
 FVector UNKRecordingCameraComponent::CalculateCameraPosition(FVector OrbitPoint, FVector TangentDirection) const
 {
-	// Calculate perpendicular direction (RIGHT of tangent)
-	FVector RightDirection = FVector::CrossProduct(
-		TangentDirection,
-		FVector::UpVector
-	).GetSafeNormal();
+	// Calculate perpendicular direction (OUTWARD from orbit center)
+	// Use 2D calculation (XY plane only) - ignore Z completely
+	FVector Center2D = FVector(OrbitCenter.X, OrbitCenter.Y, 0.0f);
+	FVector OrbitPoint2D = FVector(OrbitPoint.X, OrbitPoint.Y, 0.0f);
+	FVector OutwardDirection2D = (OrbitPoint2D - Center2D).GetSafeNormal();
 	
-	// Inward direction (toward orbit center) is opposite of right
-	FVector InwardDirection = -RightDirection;
+	// Add back Z=0 to make it a proper 3D direction (horizontal only)
+	FVector OutwardDirection = FVector(OutwardDirection2D.X, OutwardDirection2D.Y, 0.0f);
 	
-	// Offset camera position inward from orbit
-	FVector CameraPosition = OrbitPoint + (InwardDirection * OffsetDistanceCm);
+	// Offset camera position OUTWARD from hit point (5 meters away from surface, SAME Z height)
+	FVector CameraPosition = OrbitPoint + (OutwardDirection * RecordingOffsetDistanceCm);
 	
 	return CameraPosition;
 }
@@ -254,7 +301,7 @@ FRotator UNKRecordingCameraComponent::CalculateCameraRotation(FVector CameraPosi
 {
 	FVector LookAtTarget;
 	
-	switch (LookMode)
+	switch (RecordingLookMode)
 	{
 		case ERecordingLookMode::Perpendicular:
 			// Look at orbit point (perpendicular view)
@@ -263,9 +310,9 @@ FRotator UNKRecordingCameraComponent::CalculateCameraRotation(FVector CameraPosi
 			
 		case ERecordingLookMode::Center:
 			// Look at orbit center
-			if (TargetActor)
+			if (RecordingTargetActor)
 			{
-				LookAtTarget = TargetActor->GetComponentsBoundingBox(true).GetCenter();
+				LookAtTarget = RecordingTargetActor->GetComponentsBoundingBox(true).GetCenter();
 			}
 			else
 			{
@@ -276,7 +323,7 @@ FRotator UNKRecordingCameraComponent::CalculateCameraRotation(FVector CameraPosi
 		case ERecordingLookMode::LookAhead:
 			// Look ahead on path
 			{
-				float LookAheadDist = FMath::Min(CurrentDistance + LookAheadDistanceCm, TotalPathLength);
+				float LookAheadDist = FMath::Min(CurrentDistance + RecordingLookAheadDistanceCm, TotalPathLength);
 				LookAtTarget = GetInterpolatedPosition(LookAheadDist);
 			}
 			break;
@@ -298,7 +345,7 @@ void UNKRecordingCameraComponent::DrawDebugVisualization(FVector CameraPosition,
 	float DrawDuration = 0.016f;  // One frame at 60 FPS
 	
 	// Draw camera-to-orbit connection
-	if (bDrawDebugPath)
+	if (bRecordingDrawDebugPath)
 	{
 		DrawDebugLine(World, CameraPosition, OrbitPoint, 
 			FColor::Yellow, false, DrawDuration, 0, 2.0f);
@@ -313,7 +360,7 @@ void UNKRecordingCameraComponent::DrawDebugVisualization(FVector CameraPosition,
 	}
 	
 	// Draw orbital path
-	if (bDrawOrbitPath)
+	if (bRecordingDrawOrbitPath)
 	{
 		for (int32 i = 0; i < MappingHitPoints.Num(); i++)
 		{
@@ -326,7 +373,7 @@ void UNKRecordingCameraComponent::DrawDebugVisualization(FVector CameraPosition,
 	}
 	
 	// Draw camera path (offset orbit)
-	if (bDrawCameraPath)
+	if (bRecordingDrawCameraPath)
 	{
 		for (int32 i = 0; i < MappingHitPoints.Num(); i++)
 		{

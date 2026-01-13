@@ -56,6 +56,7 @@ void UNKOrbitMapperComponent::StartMapping(
 	ShotCount = 0;
 	HitCount = 0;
 	TimeSinceLastShot = 0.0f;
+	MappingHitPoints.Empty();  // Clear previous hit points
 	
 	// Enable ticking
 	bIsMapping = true;
@@ -157,41 +158,34 @@ void UNKOrbitMapperComponent::PerformMappingStep(float DeltaTime)
 		Owner->SetActorRotation(LookAtRotation);
 	}
 	
-	// Shoot laser at target using LaserTracer's PerformTrace method
-	if (LaserTracer)
+	// Shoot laser - camera is already positioned and oriented correctly
+	FHitResult HitResult;
+	bool bHit = LaserTracer->PerformTrace(HitResult);
+	
+	ShotCount++;
+	
+	if (bHit)
 	{
-		FHitResult HitResult;
-		bool bHit = LaserTracer->PerformTrace(HitResult);
+		HitCount++;
 		
-		ShotCount++;
+		// **CRITICAL FIX: Store hit point for recording playback!**
+		MappingHitPoints.Add(HitResult.Location);
 		
-		if (bHit)
+		if (bDrawDebugVisuals)
 		{
-			HitCount++;
+			// Draw hit point
+			DrawDebugSphere(GetWorld(), HitResult.Location, 15.0f, 8, FColor::Yellow, true, -1.0f);
 			
-			if (bDrawDebugVisuals)
-			{
-				// Draw hit point
-				DrawDebugSphere(
-					GetWorld(),
-					HitResult.Location,
-					10.0f,  // 10cm radius
-					8,
-					FColor::Green,
-					false,
-					2.0f,  // 2 second lifetime
-					0,
-					2.0f
-				);
-			}
+			// Draw camera position
+			DrawDebugSphere(GetWorld(), OrbitPosition, 30.0f, 8, FColor::Cyan, true, -1.0f);
 		}
-		
-		// Log every 10 shots
-		if (ShotCount % 10 == 0)
-		{
-			UE_LOG(LogTemp, Log, TEXT("OrbitMapper: Shot #%d at angle %.1f° - Progress: %.1f%% - Hits: %d"),
-				ShotCount, CurrentAngle, GetProgressPercent(), HitCount);
-		}
+	}
+	
+	// Log every 10 shots
+	if (ShotCount % 10 == 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("OrbitMapper: Shot #%d at angle %.1f° - Progress: %.1f%% - Hits: %d"),
+			ShotCount, CurrentAngle, GetProgressPercent(), HitCount);
 	}
 	
 	// Draw debug orbit position
@@ -222,18 +216,19 @@ void UNKOrbitMapperComponent::PerformMappingStep(float DeltaTime)
 
 void UNKOrbitMapperComponent::CompletMapping()
 {
-	UE_LOG(LogTemp, Warning, TEXT("?????????????????????????????????????????????????????????"));
-	UE_LOG(LogTemp, Warning, TEXT("? ORBIT MAPPER - MAPPING COMPLETE                       ?"));
-	UE_LOG(LogTemp, Warning, TEXT("?????????????????????????????????????????????????????????"));
-	UE_LOG(LogTemp, Warning, TEXT("? Total Shots: %d"), ShotCount);
-	UE_LOG(LogTemp, Warning, TEXT("? Total Hits: %d"), HitCount);
-	UE_LOG(LogTemp, Warning, TEXT("? Hit Rate: %.1f%%"), HitCount > 0 ? (HitCount / (float)ShotCount * 100.0f) : 0.0f);
-	UE_LOG(LogTemp, Warning, TEXT("? Final Angle: %.1f°"), CurrentAngle);
-	UE_LOG(LogTemp, Warning, TEXT("?????????????????????????????????????????????????????????"));
+	UE_LOG(LogTemp, Warning, TEXT("???????????????????????????????????????????????????????"));
+	UE_LOG(LogTemp, Warning, TEXT("?? ORBIT MAPPER - MAPPING COMPLETE"));
+	UE_LOG(LogTemp, Warning, TEXT("???????????????????????????????????????????????????????"));
+	UE_LOG(LogTemp, Warning, TEXT("  Total Shots: %d"), ShotCount);
+	UE_LOG(LogTemp, Warning, TEXT("  Total Hits: %d"), HitCount);
+	UE_LOG(LogTemp, Warning, TEXT("  Hit Rate: %.1f%%"), 
+		ShotCount > 0 ? (HitCount / (float)ShotCount * 100.0f) : 0.0f);
+	UE_LOG(LogTemp, Warning, TEXT("  Final Angle: %.1f°"), CurrentAngle);
+	UE_LOG(LogTemp, Warning, TEXT("  ? Hit Points Stored: %d"), MappingHitPoints.Num());
+	UE_LOG(LogTemp, Warning, TEXT("???????????????????????????????????????????????????????"));
 	
 	bIsMapping = false;
 	SetComponentTickEnabled(false);
 	
 	OnMappingComplete.Broadcast();
 }
- 

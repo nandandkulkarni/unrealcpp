@@ -120,6 +120,7 @@ private:
 	FSimpleHUDButton StartDiscoveryButton;
 	FSimpleHUDButton ClearLinesButton;
 	FSimpleHUDButton ShootLaserButton;
+	FSimpleHUDButton StartRecordingButton;  // New button for starting recording playback
 	
 	// Dynamic camera buttons (created based on available cameras)
 	TArray<FSimpleHUDButton> CameraButtons;

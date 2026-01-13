@@ -42,62 +42,77 @@ public:
 	// ===== Configuration =====
 	
 	/**
-	 * Playback speed in meters per second
+	 * Recording playback speed in meters per second
+	 * Default: 1.0 m/s for smooth, observable movement
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback")
-	float PlaybackSpeed = 5.0f;
+	float RecordingPlaybackSpeed = 1.0f;
 	
 	/**
-	 * Distance camera is offset from orbit (in cm)
+	 * Recording camera offset distance from orbit (in cm)
 	 * Default: 500cm = 5 meters
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback")
-	float OffsetDistanceCm = 500.0f;
+	float RecordingOffsetDistanceCm = 500.0f;
 	
 	/**
-	 * How camera looks at target
+	 * Recording camera look mode - how camera looks at target
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback")
-	ERecordingLookMode LookMode = ERecordingLookMode::Perpendicular;
+	ERecordingLookMode RecordingLookMode = ERecordingLookMode::Perpendicular;
 	
 	/**
-	 * Look-ahead distance in cm (only used if LookMode = LookAhead)
+	 * Recording look-ahead distance in cm (only used if RecordingLookMode = LookAhead)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback",
-		meta = (EditCondition = "LookMode == ERecordingLookMode::LookAhead", EditConditionHides))
-	float LookAheadDistanceCm = 100.0f;
+		meta = (EditCondition = "RecordingLookMode == ERecordingLookMode::LookAhead", EditConditionHides))
+	float RecordingLookAheadDistanceCm = 100.0f;
 	
 	/**
-	 * Loop playback continuously
+	 * Loop recording playback continuously
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback")
-	bool bLoopPlayback = true;
+	bool bRecordingLoopPlayback = true;
 	
 	/**
-	 * Target actor (for Center look mode)
+	 * Enable detailed movement logging during playback
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback")
-	AActor* TargetActor;
+	bool bRecordingEnableMovementLogging = false;
+	
+	/**
+	 * Log interval in seconds (how often to log movement data)
+	 * Default: 1.0 second
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback",
+		meta = (EditCondition = "bRecordingEnableMovementLogging", EditConditionHides, ClampMin = "0.1", ClampMax = "10.0"))
+	float RecordingMovementLogInterval = 1.0f;
+	
+	/**
+	 * Target actor for recording camera (for Center look mode)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback")
+	AActor* RecordingTargetActor;
 	
 	// ===== Debug Visualization =====
 	
 	/**
-	 * Draw line from camera to orbit point
+	 * Draw line from recording camera to orbit point
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Debug")
-	bool bDrawDebugPath = true;
+	bool bRecordingDrawDebugPath = true;
 	
 	/**
-	 * Draw the orbital path
+	 * Draw the orbital path during recording
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Debug")
-	bool bDrawOrbitPath = true;
+	bool bRecordingDrawOrbitPath = true;
 	
 	/**
-	 * Draw the camera path (offset orbit)
+	 * Draw the recording camera path (offset orbit)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Debug")
-	bool bDrawCameraPath = true;
+	bool bRecordingDrawCameraPath = true;
 	
 	// ===== Public API =====
 	
@@ -160,6 +175,11 @@ private:
 	 */
 	bool bIsPlaying = false;
 	bool bIsPaused = false;
+	
+	/**
+	 * Movement logging timer
+	 */
+	float TimeSinceLastMovementLog = 0.0f;
 	
 	// ===== Helper Methods =====
 	

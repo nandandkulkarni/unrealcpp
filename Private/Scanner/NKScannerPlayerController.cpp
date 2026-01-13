@@ -746,3 +746,29 @@ void ANKScannerPlayerController::ShootLaserFromCamera()
 	UE_LOG(LogTemp, Warning, TEXT("║ • Lines are PERSISTENT (never disappear)"));
 	UE_LOG(LogTemp, Warning, TEXT("╚═══════════════════════════════════════════════════════╝"));
 }
+
+void ANKScannerPlayerController::StartRecording()
+{
+	UE_LOG(LogTemp, Warning, TEXT("📹 StartRecording() called from PlayerController"));
+	
+	// Find the mapping camera
+	ANKMappingCamera* MappingCamera = Cast<ANKMappingCamera>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ANKMappingCamera::StaticClass()));
+	
+	if (!MappingCamera)
+	{
+		UE_LOG(LogTemp, Error, TEXT("  ❌ No MappingCamera found in level!"));
+		return;
+	}
+	
+	// Check if mapping is complete
+	if (MappingCamera->GetScannerState() != EMappingScannerState::Complete)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  ⚠️ Mapping not complete yet (current state: %d)"), 
+			(int32)MappingCamera->GetScannerState());
+		return;
+	}
+	
+	// Start recording playback
+	MappingCamera->StartRecordingPlayback();
+}

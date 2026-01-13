@@ -151,6 +151,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Camera")
 	void ShootLaserFromCamera();
+	
+	/**
+	 * Start recording playback on the mapping camera
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Scanner")
+	void StartRecording();
 
 private:
 	// ===== Camera Data =====

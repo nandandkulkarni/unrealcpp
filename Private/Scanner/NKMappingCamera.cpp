@@ -636,14 +636,7 @@ void ANKMappingCamera::OnMappingComplete()
 	TransitionToState(EMappingScannerState::Complete);
 	
 	UE_LOG(LogTemp, Warning, TEXT("  State transitioned to Complete"));
-	
-	// Automatically start recording playback
-	if (RecordingCameraComponent && OrbitMapperComponent)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("  Starting automatic recording playback..."));
-		StartRecordingPlayback();
-	}
-	
+	UE_LOG(LogTemp, Warning, TEXT("  Recording playback can now be started manually via HUD button"));
 	UE_LOG(LogTemp, Warning, TEXT("========================================"));
 }
 
@@ -671,7 +664,7 @@ void ANKMappingCamera::StartRecordingPlayback()
 	}
 	
 	// Configure recording camera
-	RecordingCameraComponent->TargetActor = TargetActor;
+	RecordingCameraComponent->RecordingTargetActor = TargetActor;
 	
 	// Start playback
 	RecordingCameraComponent->StartPlayback(HitPoints);
@@ -685,6 +678,24 @@ void ANKMappingCamera::StopRecordingPlayback()
 	{
 		RecordingCameraComponent->StopPlayback();
 	}
+}
+
+float ANKMappingCamera::GetRecordingProgress() const
+{
+	if (RecordingCameraComponent)
+	{
+		return RecordingCameraComponent->GetProgress();
+	}
+	return 0.0f;
+}
+
+bool ANKMappingCamera::IsRecordingPlaying() const
+{
+	if (RecordingCameraComponent)
+	{
+		return RecordingCameraComponent->IsPlaying();
+	}
+	return false;
 }
 
 void ANKMappingCamera::TransitionToState(EMappingScannerState NewState)

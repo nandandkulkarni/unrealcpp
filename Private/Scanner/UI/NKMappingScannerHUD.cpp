@@ -28,6 +28,11 @@ ANKMappingScannerHUD::ANKMappingScannerHUD()
 	ShootLaserButton.Size = FVector2D(180.0f, 45.0f);
 	ShootLaserButton.NormalColor = FLinearColor(0.8f, 0.2f, 0.2f, 0.8f);  // Red
 	ShootLaserButton.HoverColor = FLinearColor(1.0f, 0.3f, 0.3f, 0.9f);   // Brighter red
+	
+	StartRecordingButton.ButtonText = TEXT("📹 Start Recording");
+	StartRecordingButton.Size = FVector2D(200.0f, 50.0f);
+	StartRecordingButton.NormalColor = FLinearColor(0.6f, 0.2f, 0.8f, 0.8f);  // Purple
+	StartRecordingButton.HoverColor = FLinearColor(0.7f, 0.3f, 0.9f, 0.9f);   // Brighter purple
 }
 
 void ANKMappingScannerHUD::BeginPlay()
@@ -238,126 +243,52 @@ void ANKMappingScannerHUD::DrawLeftSideInfo(float& YPos)
 		YPos += LineHeight * 0.5f;
 	}
 	
-	// ===== FIRST HIT DETAILS (only when discovered) =====
-	if (MappingCamera->GetScannerState() == EMappingScannerState::Discovered && MappingCamera->HasFirstHit())
+	// ===== RECORDING PLAYBACK PROGRESS (only when recording is playing) =====
+	if (MappingCamera->IsRecordingPlaying())
 	{
-		FHitResult Hit = MappingCamera->GetFirstHitResult();
-		float Angle = MappingCamera->GetFirstHitAngle();
-		FVector CamPos = MappingCamera->GetFirstHitCameraPosition();
-		FRotator CamRot = MappingCamera->GetFirstHitCameraRotation();
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
+		DrawLine(TEXT("📹 RECORDING PLAYBACK"), YPos, FLinearColor(0.6f, 0.2f, 0.8f, 1.0f));  // Purple
+		DrawLine(TEXT("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"), YPos, HUDColors::Info);
 		
-		AActor* HitActor = Hit.GetActor();
-		FString HitActorLabel = HitActor ? HitActor->GetActorLabel() : TEXT("None");
-		FString HitActorName = HitActor ? HitActor->GetName() : TEXT("None");
-		FString ComponentName = Hit.Component.IsValid() ? Hit.Component->GetName() : TEXT("None");
-		FString ComponentClass = Hit.Component.IsValid() ? Hit.Component->GetClass()->GetName() : TEXT("None");
+		float Progress = MappingCamera->GetRecordingProgress();
+		float ProgressPercent = Progress * 100.0f;
 		
-		DrawLine(TEXT("FIRST HIT DETAILS:"), YPos, HUDColors::Success);
-		DrawLine(FString::Printf(TEXT("• Hit Actor: '%s'"), *HitActorLabel), YPos);
-		DrawLine(FString::Printf(TEXT("  (%s)"), *HitActorName), YPos, HUDColors::SubText);
-		DrawLine(FString::Printf(TEXT("• Component: %s"), *ComponentName), YPos);
-		DrawLine(FString::Printf(TEXT("  (%s)"), *ComponentClass), YPos, HUDColors::SubText);
-		DrawLine(FString::Printf(TEXT("• Hit Angle: %.1f°"), Angle), YPos);
-		DrawLine(FString::Printf(TEXT("• Hit Distance: %.1f cm (%.2f m)"), 
-			Hit.Distance, Hit.Distance / 100.0f), YPos);
-		DrawLine(FString::Printf(TEXT("• Hit Location:")), YPos);
-		DrawLine(FString::Printf(TEXT("  X=%.1f Y=%.1f Z=%.1f"), 
-			Hit.Location.X, Hit.Location.Y, Hit.Location.Z), YPos);
-		DrawLine(FString::Printf(TEXT("  (%.2fm, %.2fm, %.2fm)"), 
-			Hit.Location.X/100.0f, Hit.Location.Y/100.0f, Hit.Location.Z/100.0f), YPos);
+		DrawLine(FString::Printf(TEXT("• Progress: %.1f%%"), ProgressPercent), YPos, HUDColors::Progress);
 		
-		YPos += LineHeight * 0.3f;
-		DrawLine(TEXT("CAMERA AT HIT:"), YPos, HUDColors::ControlMode);
-		DrawLine(FString::Printf(TEXT("• Pos: X=%.1f Y=%.1f Z=%.1f"), 
-			CamPos.X, CamPos.Y, CamPos.Z), YPos);
-		DrawLine(FString::Printf(TEXT("       (%.2fm, %.2fm, %.2fm)"), 
-			CamPos.X/100.0f, CamPos.Y/100.0f, CamPos.Z/100.0f), YPos);
-		DrawLine(FString::Printf(TEXT("• Rot: P=%.1f° Y=%.1f° R=%.1f°"), 
-			CamRot.Pitch, CamRot.Yaw, CamRot.Roll), YPos);
-		YPos += LineHeight * 0.5f;
-	}
-	
-	// ===== TARGET INFO =====
-	if (MappingCamera->TargetActor)
-	{
-		FString TargetLabel = MappingCamera->TargetActor->GetActorLabel();
-		FString TargetName = MappingCamera->TargetActor->GetName();
+		// Draw progress bar
+		float BarWidth = 300.0f;
+		float BarHeight = 20.0f;
+		float BarX = LeftMargin;
+		float BarY = YPos;
 		
-		DrawLine(TEXT("TARGET:"), YPos, HUDColors::Header);
-		DrawLine(FString::Printf(TEXT("• Name: '%s'"), *TargetLabel), YPos);
-		DrawLine(FString::Printf(TEXT("  (%s)"), *TargetName), YPos, HUDColors::SubText);
+		// Background bar
+		FCanvasTileItem BackgroundBar(FVector2D(BarX, BarY), FVector2D(BarWidth, BarHeight), 
+			FLinearColor(0.2f, 0.2f, 0.2f, 0.8f));
+		BackgroundBar.BlendMode = SE_BLEND_Translucent;
+		Canvas->DrawItem(BackgroundBar);
 		
-		FBox Bounds = MappingCamera->TargetActor->GetComponentsBoundingBox(true);
-		FVector Size = Bounds.GetSize();
-		FVector Center = Bounds.GetCenter();
-		FVector Extent = Bounds.GetExtent();
-		
-		DrawLine(TEXT("• Bounding Box:"), YPos);
-		DrawLine(FString::Printf(TEXT("  Center (World): X=%.2f, Y=%.2f"), 
-			Center.X/100.0f, Center.Y/100.0f), YPos, HUDColors::Info);
-		DrawLine(FString::Printf(TEXT("  Extents: X=%.2f, Y=%.2f, Z=%.2f m"), 
-			Extent.X/100.0f, Extent.Y/100.0f, Extent.Z/100.0f), YPos, HUDColors::Info);
-		DrawLine(FString::Printf(TEXT("  Size: %.1f × %.1f × %.1f m"), 
-			Size.X/100.0f, Size.Y/100.0f, Size.Z/100.0f), YPos);
-		YPos += LineHeight * 0.5f;
-	}
-	
-	// ===== CAMERA INFO =====
-	DrawLine(TEXT("CAMERA:"), YPos, HUDColors::Header);
-	FVector CamPos = MappingCamera->GetActorLocation();
-	DrawLine(FString::Printf(TEXT("• Pos: X=%.1f Y=%.1f Z=%.1f"), 
-		CamPos.X, CamPos.Y, CamPos.Z), YPos);
-	DrawLine(FString::Printf(TEXT("       (%.2fm, %.2fm, %.2fm)"), 
-		CamPos.X/100.0f, CamPos.Y/100.0f, CamPos.Z/100.0f), YPos);
-	
-	FRotator CamRot = MappingCamera->GetActorRotation();
-	DrawLine(FString::Printf(TEXT("• Rot: P=%.1f° Y=%.1f° R=%.1f°"), 
-		CamRot.Pitch, CamRot.Yaw, CamRot.Roll), YPos);
-	
-	// ===== ALL 3 CAMERAS INFO =====
-	YPos += LineHeight * 0.5f;
-	DrawAllCamerasInfo(YPos);
-	
-	// ===== LOGGING INFO =====
-	if (UNKScannerLogger* Logger = UNKScannerLogger::Get(GetWorld()))
-	{
-		YPos += LineHeight * 0.5f;
-		DrawLine(TEXT("LOGGING:"), YPos, HUDColors::Header);
-		
-		// Logging status
-		FString LogStatus = Logger->bEnableLogging ? TEXT("Enabled") : TEXT("Disabled");
-		FLinearColor StatusColor = Logger->bEnableLogging ? HUDColors::Success : HUDColors::SubText;
-		DrawLine(FString::Printf(TEXT("• Status: %s"), *LogStatus), YPos, StatusColor);
-		
-		// File logging status and path
-		if (Logger->bEnableLogging && Logger->bLogToFile)
+		// Progress bar
+		if (Progress > 0.0f)
 		{
-			DrawLine(TEXT("• File Logging: Enabled"), YPos, HUDColors::Success);
-			
-			// Get the full resolved path
-			FString ResolvedLogPath = Logger->GetResolvedLogFilePath();
-			
-			// Split path if too long for display
-			if (ResolvedLogPath.Len() > 80)
-			{
-				DrawLine(TEXT("• Log File:"), YPos, HUDColors::Info);
-				
-				// Extract filename
-				FString FileName = FPaths::GetCleanFilename(ResolvedLogPath);
-				FString Directory = FPaths::GetPath(ResolvedLogPath);
-				
-				DrawLine(FString::Printf(TEXT("  %s"), *FileName), YPos, HUDColors::SubText);
-				DrawLine(FString::Printf(TEXT("  in: %s"), *Directory), YPos, HUDColors::SubText);
-			}
-			else
-			{
-				DrawLine(FString::Printf(TEXT("• Log File: %s"), *ResolvedLogPath), YPos, HUDColors::Info);
-			}
+			FCanvasTileItem ProgressBar(FVector2D(BarX, BarY), FVector2D(BarWidth * Progress, BarHeight), 
+				FLinearColor(0.6f, 0.2f, 0.8f, 0.9f));  // Purple
+			ProgressBar.BlendMode = SE_BLEND_Translucent;
+			Canvas->DrawItem(ProgressBar);
 		}
-		else if (Logger->bEnableLogging)
-		{
-			DrawLine(TEXT("• File Logging: Disabled (Output window only)"), YPos, HUDColors::SubText);
-		}
+		
+		// Border
+		FCanvasBoxItem Border(FVector2D(BarX, BarY), FVector2D(BarWidth, BarHeight));
+		Border.SetColor(FLinearColor::White);
+		Canvas->DrawItem(Border);
+		
+		YPos += BarHeight + (LineHeight * 0.5f);
+		
+		// Recording stats
+		DrawLine(TEXT("STATUS:"), YPos, HUDColors::SubText);
+		DrawLine(TEXT("  • Camera moving smoothly along orbit"), YPos, HUDColors::Success);
+		DrawLine(TEXT("  • Perpendicular view of target surface"), YPos, HUDColors::Info);
+		
+		YPos += LineHeight * 0.5f;
 	}
 }
 
@@ -417,8 +348,32 @@ void ANKMappingScannerHUD::DrawRightSideButtons()
 	AddHitBox(ShootLaserButton.Position, ShootLaserButton.Size,
 		FName("ShootLaserButton"), false, 0);
 	
+	// ===== START RECORDING BUTTON (only enabled when mapping complete) =====
+	bool bRecordingAvailable = (State == EMappingScannerState::Complete);
+	
+	if (bRecordingAvailable)
+	{
+		StartRecordingButton.NormalColor = FLinearColor(0.6f, 0.2f, 0.8f, 0.8f);  // Purple (enabled)
+	}
+	else
+	{
+		StartRecordingButton.NormalColor = FLinearColor(0.3f, 0.3f, 0.3f, 0.5f);  // Gray (disabled)
+	}
+	
+	StartRecordingButton.Position = FVector2D(
+		Canvas->SizeX - StartRecordingButton.Size.X - ButtonPadding,
+		ButtonPadding + StartDiscoveryButton.Size.Y + ClearLinesButton.Size.Y + ShootLaserButton.Size.Y + (ButtonSpacing * 3)
+	);
+	
+	DrawButton(StartRecordingButton);
+	if (bRecordingAvailable)
+	{
+		AddHitBox(StartRecordingButton.Position, StartRecordingButton.Size,
+			FName("StartRecordingButton"), false, 0);
+	}
+	
 	// ===== CAMERA BUTTONS (Dynamic) =====
-	float CurrentYPos = ButtonPadding + StartDiscoveryButton.Size.Y + ClearLinesButton.Size.Y + ShootLaserButton.Size.Y + (ButtonSpacing * 3);
+	float CurrentYPos = ButtonPadding + StartDiscoveryButton.Size.Y + ClearLinesButton.Size.Y + ShootLaserButton.Size.Y + StartRecordingButton.Size.Y + (ButtonSpacing * 4);
 	
 	ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
 	int32 CurrentCameraIndex = ScannerPC ? ScannerPC->GetCurrentCameraIndex() : -1;
@@ -496,6 +451,7 @@ void ANKMappingScannerHUD::UpdateButtonHover()
 	StartDiscoveryButton.bIsHovered = IsPointInButton(StartDiscoveryButton, MousePos);
 	ClearLinesButton.bIsHovered = IsPointInButton(ClearLinesButton, MousePos);
 	ShootLaserButton.bIsHovered = IsPointInButton(ShootLaserButton, MousePos);
+	StartRecordingButton.bIsHovered = IsPointInButton(StartRecordingButton, MousePos);
 	
 	// Update hover for all camera buttons
 	for (FSimpleHUDButton& CameraButton : CameraButtons)
@@ -542,6 +498,21 @@ void ANKMappingScannerHUD::NotifyHitBoxClick(FName BoxName)
 		if (ScannerPC)
 		{
 			ScannerPC->ShootLaserFromCamera();
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("  PlayerController is not ANKScannerPlayerController!"));
+		}
+	}
+	else if (BoxName == "StartRecordingButton")
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HUD: Start Recording button clicked"));
+		
+		// Call PlayerController to start recording
+		ANKScannerPlayerController* ScannerPC = Cast<ANKScannerPlayerController>(GetOwningPlayerController());
+		if (ScannerPC)
+		{
+			ScannerPC->StartRecording();
 		}
 		else
 		{

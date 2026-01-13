@@ -258,6 +258,18 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Scanner|Recording")
 	void StopRecordingPlayback();
+	
+	/**
+	 * Get recording playback progress (0.0 to 1.0)
+	 */
+	UFUNCTION(BlueprintPure, Category = "Scanner|Recording")
+	float GetRecordingProgress() const;
+	
+	/**
+	 * Is recording currently playing?
+	 */
+	UFUNCTION(BlueprintPure, Category = "Scanner|Recording")
+	bool IsRecordingPlaying() const;
 
 private:
 	// ===== Components =====
