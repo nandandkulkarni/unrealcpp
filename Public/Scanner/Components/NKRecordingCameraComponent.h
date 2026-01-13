@@ -43,10 +43,10 @@ public:
 	
 	/**
 	 * Recording playback speed in meters per second
-	 * Default: 1.0 m/s for smooth, observable movement
+	 * Default: 0.3 m/s for slow, observable movement
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recording Playback")
-	float RecordingPlaybackSpeed = 1.0f;
+	float RecordingPlaybackSpeed = 0.3f;
 	
 	/**
 	 * Recording camera offset distance from orbit (in cm)

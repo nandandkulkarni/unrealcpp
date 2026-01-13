@@ -11,7 +11,6 @@
 class UNKTargetFinderComponent;
 class UNKLaserTracerComponent;
 class UNKCameraControllerComponent;
-class UNKTerrainMapperComponent;
 class UNKOrbitMapperComponent;
 class UNKRecordingCameraComponent;
 class ANKOverheadCamera;
@@ -282,9 +281,6 @@ private:
 	
 	UPROPERTY()
 	UNKCameraControllerComponent* CameraControllerComponent;
-	
-	UPROPERTY()
-	UNKTerrainMapperComponent* TerrainMapperComponent;
 	
 	UPROPERTY()
 	UNKOrbitMapperComponent* OrbitMapperComponent;

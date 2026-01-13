@@ -39,11 +39,11 @@ public:
 	
 	/** Angular step in degrees (how much to rotate each tick) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mapping|Settings")
-	float AngularStepDegrees = 5.0f;
+	float AngularStepDegrees = 0.5f;
 	
 	/** Delay between shots in seconds (0 = every tick) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mapping|Settings")
-	float ShotDelay = 0.0f;
+	float ShotDelay = 0.1f;
 	
 	/** Whether to draw debug visualization during mapping */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mapping|Debug")

@@ -4,7 +4,6 @@
 #include "Scanner/Components/NKTargetFinderComponent.h"
 #include "Scanner/Components/NKLaserTracerComponent.h"
 #include "Scanner/Components/NKCameraControllerComponent.h"
-#include "Scanner/Components/NKTerrainMapperComponent.h"
 #include "Scanner/Components/NKOrbitMapperComponent.h"
 #include "Scanner/Components/NKRecordingCameraComponent.h"
 #include "Scanner/NKOverheadCamera.h"
@@ -25,7 +24,6 @@ ANKMappingCamera::ANKMappingCamera(const FObjectInitializer& ObjectInitializer)
 	TargetFinderComponent = CreateDefaultSubobject<UNKTargetFinderComponent>(TEXT("TargetFinderComponent"));
 	LaserTracerComponent = CreateDefaultSubobject<UNKLaserTracerComponent>(TEXT("LaserTracerComponent"));
 	CameraControllerComponent = CreateDefaultSubobject<UNKCameraControllerComponent>(TEXT("CameraControllerComponent"));
-	TerrainMapperComponent = CreateDefaultSubobject<UNKTerrainMapperComponent>(TEXT("TerrainMapperComponent"));
 	OrbitMapperComponent = CreateDefaultSubobject<UNKOrbitMapperComponent>(TEXT("OrbitMapperComponent"));
 	RecordingCameraComponent = CreateDefaultSubobject<UNKRecordingCameraComponent>(TEXT("RecordingCameraComponent"));
 }
