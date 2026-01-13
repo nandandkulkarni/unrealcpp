@@ -92,7 +92,7 @@ void UNKRecordingCameraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 			UE_LOG(LogTemp, Log, TEXT("? Look Mode: %s"), 
 				RecordingLookMode == ERecordingLookMode::Perpendicular ? TEXT("Perpendicular") :
 				RecordingLookMode == ERecordingLookMode::Center ? TEXT("Center") : TEXT("Look-Ahead"));
-			UE_LOG(LogTemp, Log, TEXT("? Camera Rot: P=%.1f� Y=%.1f� R=%.1f�"), 
+			UE_LOG(LogTemp, Log, TEXT("? Camera Rot: P=%.1f° Y=%.1f° R=%.1f°"), 
 				CameraRotation.Pitch, CameraRotation.Yaw, CameraRotation.Roll);
 			UE_LOG(LogTemp, Log, TEXT("???????????????????????????????????????????????????????"));
 		}
@@ -293,6 +293,38 @@ FVector UNKRecordingCameraComponent::CalculateCameraPosition(FVector OrbitPoint,
 	
 	// Offset camera position OUTWARD from hit point (5 meters away from surface, SAME Z height)
 	FVector CameraPosition = OrbitPoint + (OutwardDirection * RecordingOffsetDistanceCm);
+	
+	// 🔍 DEBUG LOGGING - Camera Position Calculation
+	static int32 LogCounter = 0;
+	if (LogCounter % 30 == 0) // Log every 30 frames to avoid spam
+	{
+		UE_LOG(LogTemp, Warning, TEXT("🎥 [RecordingCamera] CalculateCameraPosition DEBUG:"));
+		UE_LOG(LogTemp, Warning, TEXT("   OrbitCenter (3D): (%.2f, %.2f, %.2f) m"), 
+			OrbitCenter.X / 100.0f, OrbitCenter.Y / 100.0f, OrbitCenter.Z / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("   OrbitPoint (Hit): (%.2f, %.2f, %.2f) m"), 
+			OrbitPoint.X / 100.0f, OrbitPoint.Y / 100.0f, OrbitPoint.Z / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("   Center2D: (%.2f, %.2f, %.2f)"), 
+			Center2D.X / 100.0f, Center2D.Y / 100.0f, Center2D.Z / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("   OrbitPoint2D: (%.2f, %.2f, %.2f)"), 
+			OrbitPoint2D.X / 100.0f, OrbitPoint2D.Y / 100.0f, OrbitPoint2D.Z / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("   OutwardDirection2D: (%.4f, %.4f, %.4f) [Length: %.4f]"), 
+			OutwardDirection2D.X, OutwardDirection2D.Y, OutwardDirection2D.Z, OutwardDirection2D.Size());
+		UE_LOG(LogTemp, Warning, TEXT("   OutwardDirection: (%.4f, %.4f, %.4f)"), 
+			OutwardDirection.X, OutwardDirection.Y, OutwardDirection.Z);
+		UE_LOG(LogTemp, Warning, TEXT("   RecordingOffsetDistanceCm: %.2f cm (%.2f m)"), 
+			RecordingOffsetDistanceCm, RecordingOffsetDistanceCm / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("   Offset Vector: (%.2f, %.2f, %.2f) m"), 
+			(OutwardDirection * RecordingOffsetDistanceCm).X / 100.0f,
+			(OutwardDirection * RecordingOffsetDistanceCm).Y / 100.0f,
+			(OutwardDirection * RecordingOffsetDistanceCm).Z / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("   ➡️ Final CameraPosition: (%.2f, %.2f, %.2f) m"), 
+			CameraPosition.X / 100.0f, CameraPosition.Y / 100.0f, CameraPosition.Z / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("   📏 Distance from OrbitPoint to Camera: %.2f m"), 
+			FVector::Dist(OrbitPoint, CameraPosition) / 100.0f);
+		UE_LOG(LogTemp, Warning, TEXT("   📏 Distance from OrbitCenter to Camera: %.2f m"), 
+			FVector::Dist(OrbitCenter, CameraPosition) / 100.0f);
+	}
+	LogCounter++;
 	
 	return CameraPosition;
 }

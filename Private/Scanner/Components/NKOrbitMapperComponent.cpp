@@ -70,8 +70,8 @@ void UNKOrbitMapperComponent::StartMapping(
 		OrbitCenter.X/100.0f, OrbitCenter.Y/100.0f, OrbitCenter.Z/100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("? Orbit Radius: %.2f m"), OrbitRadius/100.0f);
 	UE_LOG(LogTemp, Warning, TEXT("? Scan Height: %.2f m"), ScanHeight/100.0f);
-	UE_LOG(LogTemp, Warning, TEXT("? Start Angle: %.1f°"), StartAngle);
-	UE_LOG(LogTemp, Warning, TEXT("? Angular Step: %.1f°"), AngularStepDegrees);
+	UE_LOG(LogTemp, Warning, TEXT("? Start Angle: %.1fÂ°"), StartAngle);
+	UE_LOG(LogTemp, Warning, TEXT("? Angular Step: %.1fÂ°"), AngularStepDegrees);
 	UE_LOG(LogTemp, Warning, TEXT("? Expected Shots: ~%d"), FMath::CeilToInt(360.0f / AngularStepDegrees));
 	UE_LOG(LogTemp, Warning, TEXT("?????????????????????????????????????????????????????????"));
 }
@@ -166,25 +166,35 @@ void UNKOrbitMapperComponent::PerformMappingStep(float DeltaTime)
 	
 	if (bHit)
 	{
-		HitCount++;
-		
-		// **CRITICAL FIX: Store hit point for recording playback!**
-		MappingHitPoints.Add(HitResult.Location);
-		
-		if (bDrawDebugVisuals)
+		// âœ… CRITICAL FIX: Only store hits that match the target actor!
+		AActor* HitActor = HitResult.GetActor();
+		if (HitActor == TargetActor)
 		{
-			// Draw hit point
-			DrawDebugSphere(GetWorld(), HitResult.Location, 15.0f, 8, FColor::Yellow, true, -1.0f);
+		HitCount++;
+			// **CRITICAL FIX: Store hit point for recording playback!**
+			MappingHitPoints.Add(HitResult.Location);
 			
-			// Draw camera position
-			DrawDebugSphere(GetWorld(), OrbitPosition, 30.0f, 8, FColor::Cyan, true, -1.0f);
+			if (bDrawDebugVisuals)
+			{
+				// Draw hit point
+				DrawDebugSphere(GetWorld(), HitResult.Location, 15.0f, 8, FColor::Yellow, true, -1.0f);
+				
+				// Draw camera position
+				DrawDebugSphere(GetWorld(), OrbitPosition, 30.0f, 8, FColor::Cyan, true, -1.0f);
+		}
+		else
+		{
+			// Hit something else - log for debugging
+			UE_LOG(LogTemp, Verbose, TEXT("OrbitMapper: Shot #%d hit '%s' (not target), ignoring"),
+				ShotCount, HitActor ? *HitActor->GetName() : TEXT("NULL"));
+		}
 		}
 	}
 	
 	// Log every 10 shots
 	if (ShotCount % 10 == 0)
 	{
-		UE_LOG(LogTemp, Log, TEXT("OrbitMapper: Shot #%d at angle %.1f° - Progress: %.1f%% - Hits: %d"),
+		UE_LOG(LogTemp, Log, TEXT("OrbitMapper: Shot #%d at angle %.1fÂ° - Progress: %.1f%% - Hits: %d"),
 			ShotCount, CurrentAngle, GetProgressPercent(), HitCount);
 	}
 	
@@ -223,7 +233,7 @@ void UNKOrbitMapperComponent::CompletMapping()
 	UE_LOG(LogTemp, Warning, TEXT("  Total Hits: %d"), HitCount);
 	UE_LOG(LogTemp, Warning, TEXT("  Hit Rate: %.1f%%"), 
 		ShotCount > 0 ? (HitCount / (float)ShotCount * 100.0f) : 0.0f);
-	UE_LOG(LogTemp, Warning, TEXT("  Final Angle: %.1f°"), CurrentAngle);
+	UE_LOG(LogTemp, Warning, TEXT("  Final Angle: %.1fÂ°"), CurrentAngle);
 	UE_LOG(LogTemp, Warning, TEXT("  ? Hit Points Stored: %d"), MappingHitPoints.Num());
 	UE_LOG(LogTemp, Warning, TEXT("???????????????????????????????????????????????????????"));
 	
