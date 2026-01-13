@@ -107,6 +107,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mapping")
 	int32 GetHitCount() const { return HitCount; }
 	
+	/**
+	 * Get mapping hit points (positions where laser hit target during orbit)
+	 * Used by recording camera for playback
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mapping")
+	const TArray<FVector>& GetMappingHitPoints() const { return MappingHitPoints; }
+	
+	// ===== Data Access =====
+	
+	/**
+	 * Array of hit point positions from orbital mapping
+	 * These points form the path for recording camera playback
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Mapping|Data")
+	TArray<FVector> MappingHitPoints;
+	
 	// ===== Events =====
 	
 	UPROPERTY(BlueprintAssignable, Category = "Mapping|Events")

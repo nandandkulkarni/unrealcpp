@@ -6,6 +6,7 @@
 #include "Scanner/Components/NKCameraControllerComponent.h"
 #include "Scanner/Components/NKTerrainMapperComponent.h"
 #include "Scanner/Components/NKOrbitMapperComponent.h"
+#include "Scanner/Components/NKRecordingCameraComponent.h"
 #include "Scanner/NKOverheadCamera.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -26,6 +27,7 @@ ANKMappingCamera::ANKMappingCamera(const FObjectInitializer& ObjectInitializer)
 	CameraControllerComponent = CreateDefaultSubobject<UNKCameraControllerComponent>(TEXT("CameraControllerComponent"));
 	TerrainMapperComponent = CreateDefaultSubobject<UNKTerrainMapperComponent>(TEXT("TerrainMapperComponent"));
 	OrbitMapperComponent = CreateDefaultSubobject<UNKOrbitMapperComponent>(TEXT("OrbitMapperComponent"));
+	RecordingCameraComponent = CreateDefaultSubobject<UNKRecordingCameraComponent>(TEXT("RecordingCameraComponent"));
 }
 
 void ANKMappingCamera::PostInitializeComponents()
@@ -634,15 +636,55 @@ void ANKMappingCamera::OnMappingComplete()
 	TransitionToState(EMappingScannerState::Complete);
 	
 	UE_LOG(LogTemp, Warning, TEXT("  State transitioned to Complete"));
+	
+	// Automatically start recording playback
+	if (RecordingCameraComponent && OrbitMapperComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  Starting automatic recording playback..."));
+		StartRecordingPlayback();
+	}
+	
 	UE_LOG(LogTemp, Warning, TEXT("========================================"));
 }
 
-void ANKMappingCamera::OnMappingFailed()
+void ANKMappingCamera::StartRecordingPlayback()
 {
-	UE_LOG(LogTemp, Error, TEXT("ANKMappingCamera: Mapping failed"));
+	if (!RecordingCameraComponent)
+	{
+		UE_LOG(LogTemp, Error, TEXT("NKMappingCamera: No RecordingCameraComponent!"));
+		return;
+	}
 	
-	// Could add a MappingFailed state if needed
-	TransitionToState(EMappingScannerState::Idle);
+	if (!OrbitMapperComponent)
+	{
+		UE_LOG(LogTemp, Error, TEXT("NKMappingCamera: No OrbitMapperComponent!"));
+		return;
+	}
+	
+	// Get hit points from orbit mapper using the getter method
+	const TArray<FVector>& HitPoints = OrbitMapperComponent->GetMappingHitPoints();
+	
+	if (HitPoints.Num() < 2)
+	{
+		UE_LOG(LogTemp, Error, TEXT("NKMappingCamera: Not enough hit points for recording playback (need at least 2, have %d)"), HitPoints.Num());
+		return;
+	}
+	
+	// Configure recording camera
+	RecordingCameraComponent->TargetActor = TargetActor;
+	
+	// Start playback
+	RecordingCameraComponent->StartPlayback(HitPoints);
+	
+	UE_LOG(LogTemp, Warning, TEXT("✅ Recording playback started with %d hit points"), HitPoints.Num());
+}
+
+void ANKMappingCamera::StopRecordingPlayback()
+{
+	if (RecordingCameraComponent)
+	{
+		RecordingCameraComponent->StopPlayback();
+	}
 }
 
 void ANKMappingCamera::TransitionToState(EMappingScannerState NewState)

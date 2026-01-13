@@ -13,6 +13,7 @@ class UNKLaserTracerComponent;
 class UNKCameraControllerComponent;
 class UNKTerrainMapperComponent;
 class UNKOrbitMapperComponent;
+class UNKRecordingCameraComponent;
 class ANKOverheadCamera;
 
 // Scanner state
@@ -243,6 +244,20 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Scanner|Camera")
 	ANKOverheadCamera* GetOverheadCamera() const { return OverheadCameraActor; }
+	
+	// ===== Recording Playback =====
+	
+	/**
+	 * Start recording playback after mapping completes
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Scanner|Recording")
+	void StartRecordingPlayback();
+	
+	/**
+	 * Stop recording playback
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Scanner|Recording")
+	void StopRecordingPlayback();
 
 private:
 	// ===== Components =====
@@ -261,6 +276,9 @@ private:
 	
 	UPROPERTY()
 	UNKOrbitMapperComponent* OrbitMapperComponent;
+	
+	UPROPERTY()
+	UNKRecordingCameraComponent* RecordingCameraComponent;  // Recording playback
 	
 	UPROPERTY()
 	ANKOverheadCamera* OverheadCameraActor;  // Spawned overhead camera
