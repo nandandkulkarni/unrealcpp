@@ -501,8 +501,7 @@ void ANKMappingCamera::StartMapping()
 	UE_LOG(LogTemp, Warning, TEXT("  Angular Step: %.1f°"), OrbitMapperComponent->AngularStepDegrees);
 	
 	// Configure and start orbit mapper
-	OrbitMapperComponent->AngularStepDegrees = 5.0f;  // 5 degrees per step
-	OrbitMapperComponent->ShotDelay = 0.0f;  // Shoot every tick
+	// Use component defaults: AngularStepDegrees = 0.5f, ShotDelay = 0.1f
 	OrbitMapperComponent->bDrawDebugVisuals = true;
 	
 	OrbitMapperComponent->StartMapping(
