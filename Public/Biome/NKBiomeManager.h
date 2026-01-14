@@ -82,10 +82,17 @@ public:
 	EGrassSpawnMode GrassSpawnMode = EGrassSpawnMode::PCG;
 	
 	/**
+	 * Allow automatic fallback to HISM if PCG fails
+	 * If false, PCG failure will not trigger HISM spawning
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PCG Grass")
+	bool bAllowHISMFallback = false;
+	
+	/**
 	 * Grass density (points per square meter)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PCG Grass", meta = (ClampMin = "0.01", ClampMax = "10.0"))
-	float PointsPerSquareMeter = 0.5f;
+	float PointsPerSquareMeter = 2.0f;
 	
 	/**
 	 * Minimum grass scale

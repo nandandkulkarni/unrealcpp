@@ -14,6 +14,7 @@
 #include "Elements/PCGSurfaceSampler.h"
 #include "Elements/PCGStaticMeshSpawner.h"
 #include "MeshSelectors/PCGMeshSelectorWeighted.h"
+#include "Elements/PCGTypedGetter.h"  // For UPCGGetLandscapeSettings
 #include "Data/PCGPointData.h"
 
 // Helper macros for logging (uses instance logger)
@@ -93,8 +94,17 @@ void ANKBiomeManager::BeginPlay()
 		
 		if (!GrassPreset)
 		{
-			BIOME_LOG_WARNING(TEXT("⚠️ PCG graph creation failed! Falling back to HISM mode..."));
-			GrassSpawnMode = EGrassSpawnMode::HISM;
+			if (bAllowHISMFallback)
+			{
+				BIOME_LOG_WARNING(TEXT("⚠️ PCG graph creation failed! Falling back to HISM mode..."));
+				GrassSpawnMode = EGrassSpawnMode::HISM;
+			}
+			else
+			{
+				BIOME_LOG_ERROR(TEXT("❌ PCG graph creation failed! HISM fallback is disabled."));
+				BIOME_LOG_ERROR(TEXT("   Enable 'bAllowHISMFallback' property to use HISM as fallback."));
+				return;
+			}
 		}
 		else
 		{
@@ -106,7 +116,7 @@ void ANKBiomeManager::BeginPlay()
 		}
 	}
 	
-	// HISM Mode (or fallback)
+	// HISM Mode (or fallback if enabled)
 	if (GrassSpawnMode == EGrassSpawnMode::HISM)
 	{
 		BIOME_LOG(TEXT("🌿 Using HISM direct spawning mode..."));
@@ -189,44 +199,50 @@ void ANKBiomeManager::SetupPCGComponent()
 		return;
 	}
 	
-	// Create PCG component
-	PCGComponent = NewObject<UPCGComponent>(this, UPCGComponent::StaticClass(), TEXT("RuntimeGrassPCG"));
+	// Create PCG component with LANDSCAPE as owner (critical for bounds)
+	// PCGHelpers::GetGridBounds() checks if owner is ALandscapeProxy - if yes, uses GetLandscapeBounds()
+	// If owner is BiomeManager (no bounds), GetActorBounds() returns invalid bounds
+	BIOME_LOG(TEXT("🔧 Creating PCGComponent with Landscape as owner..."));
+	PCGComponent = NewObject<UPCGComponent>(TargetLandscape, UPCGComponent::StaticClass(), TEXT("RuntimeGrassPCG"));
 	if (!PCGComponent)
 	{
 		BIOME_LOG_ERROR(TEXT("❌ Failed to create PCGComponent with NewObject!"));
 		return;
 	}
 	BIOME_LOG(TEXT("✅ PCGComponent created successfully"));
+	BIOME_LOG(FString::Printf(TEXT("   Owner: %s"), *PCGComponent->GetOwner()->GetName()));
 	
-	// Register component
-	BIOME_LOG(TEXT("📝 Registering PCGComponent..."));
-	PCGComponent->RegisterComponent();
-	BIOME_LOG(TEXT("✅ PCGComponent registered"));
-	
-	// Bind to generation complete event
-	// Note: In UE 5.7 this is OnPCGGraphGeneratedExternal
-	PCGComponent->OnPCGGraphGeneratedExternal.AddDynamic(this, &ANKBiomeManager::OnPCGGraphGenerated);
-	BIOME_LOG(TEXT("🔗 Bound to OnPCGGraphGeneratedExternal event"));
-	
-	// Activate component (CRITICAL - component must be active to generate)
-	BIOME_LOG(TEXT("⚡ Activating PCGComponent..."));
-	PCGComponent->Activate(true);
-	BIOME_LOG(TEXT("✅ PCGComponent activated"));
+	// Configure PCG component settings BEFORE registration
 	
 	// Set the grass preset graph
 	BIOME_LOG(FString::Printf(TEXT("🎨 Setting graph to: %s"), *GrassPreset->GetName()));
 	PCGComponent->SetGraph(GrassPreset);
 	
 	// Configure for runtime generation
-	BIOME_LOG(TEXT("⚙️ Configuring: GenerationTrigger=GenerateAtRuntime"));
-	PCGComponent->GenerationTrigger = EPCGComponentGenerationTrigger::GenerateAtRuntime;
+	// NOTE: Using GenerateOnLoad ensures it generates when registered/loaded
+	BIOME_LOG(TEXT("⚙️ Configuring: GenerationTrigger=GenerateOnLoad"));
+	PCGComponent->GenerationTrigger = EPCGComponentGenerationTrigger::GenerateOnLoad;
 	
-	// Enable partitioning for large landscapes (critical for performance)
-	BIOME_LOG(TEXT("🗺️ Enabling partitioned generation..."));
-	PCGComponent->SetIsPartitioned(true);
-	BIOME_LOG(TEXT("✅ Partitioning enabled"));
+	// Debug: Disable partitioning to force immediate generation of entire landscape
+	// This helps rule out issues with PCGWorldActor/GenerationSources
+	BIOME_LOG(TEXT("🧪 Debug: Disabling partitioning to force global generation..."));
+	PCGComponent->SetIsPartitioned(false);
+	BIOME_LOG(TEXT("⚠️ Partitioning disabled (Debug Mode)"));
 	
-	// Get landscape bounds
+	// Bind to generation complete event
+	PCGComponent->OnPCGGraphGeneratedExternal.AddDynamic(this, &ANKBiomeManager::OnPCGGraphGenerated);
+	BIOME_LOG(TEXT("🔗 Bound to OnPCGGraphGeneratedExternal event"));
+	
+	// Activate component
+	BIOME_LOG(TEXT("⚡ Activating PCGComponent..."));
+	PCGComponent->Activate(true);
+	
+	// Register component (LAST step to ensure all settings are applied)
+	BIOME_LOG(TEXT("📝 Registering PCGComponent..."));
+	PCGComponent->RegisterComponent();
+	BIOME_LOG(TEXT("✅ PCGComponent registered"));
+	
+	// Get landscape bounds for logging
 	FBox LandscapeBounds = TargetLandscape->GetComponentsBoundingBox(true);
 	
 	BIOME_LOG(TEXT("✅ PCG Component fully configured:"));
@@ -336,12 +352,31 @@ UPCGGraph* ANKBiomeManager::CreatePCGGraphProgrammatically()
 	
 	BIOME_LOG(TEXT("✅ UPCGGraph created"));
 	
-	// 2. Create Surface Sampler Node
+	// 2. Create Get Landscape Data Node (the correct node for landscape data)
+	// This is the C++ equivalent of the "Get Landscape Data" visual node
+	UPCGGetLandscapeSettings* GetLandscapeSettings = NewObject<UPCGGetLandscapeSettings>(NewGraph);
+	
+	// Configure to look at "Self" (the Landscape actor owning this component)
+	// This avoids expensive world searches and ensures we get the right landscape
+	GetLandscapeSettings->ActorSelector.ActorFilter = EPCGActorFilter::Self;
+	GetLandscapeSettings->ActorSelector.ActorSelection = EPCGActorSelection::ByClass;
+	GetLandscapeSettings->ActorSelector.ActorSelectionClass = ALandscapeProxy::StaticClass();
+	
+	UPCGNode* GetLandscapeNode = NewGraph->AddNode(GetLandscapeSettings);
+	if (!GetLandscapeNode)
+	{
+		BIOME_LOG_ERROR(TEXT("❌ Failed to create GetLandscapeData Node!"));
+		return nullptr;
+	}
+	BIOME_LOG(TEXT("✅ GetLandscapeData Node added"));
+	
+	// 3. Create Surface Sampler Node
 	// Note: AddNode requires an instantiated Settings object
 	UPCGSurfaceSamplerSettings* SamplerSettings = NewObject<UPCGSurfaceSamplerSettings>(NewGraph);
 	SamplerSettings->PointsPerSquaredMeter = PointsPerSquareMeter;
 	SamplerSettings->PointExtents = FVector(10.0f, 10.0f, 10.0f);
 	SamplerSettings->Looseness = 1.0f;
+	SamplerSettings->bUnbounded = true; // CRITICAL: Generate over entire landscape, not just actor bounds
 	
 	UPCGNode* SamplerNode = NewGraph->AddNode(SamplerSettings);
 	if (!SamplerNode)
@@ -351,7 +386,7 @@ UPCGGraph* ANKBiomeManager::CreatePCGGraphProgrammatically()
 	}
 	BIOME_LOG(TEXT("✅ Surface Sampler Node added"));
 	
-	// 3. Create Static Mesh Spawner Node
+	// 4. Create Static Mesh Spawner Node
 	UPCGStaticMeshSpawnerSettings* SpawnerSettings = NewObject<UPCGStaticMeshSpawnerSettings>(NewGraph);
 	
 	// Set Mesh Selector Type (Weighted is the default/standard)
@@ -366,7 +401,6 @@ UPCGGraph* ANKBiomeManager::CreatePCGGraphProgrammatically()
 		
 		MeshSelector->MeshEntries.Add(Entry);
 	}
-	// Note: bApplyMeshConfig behaves differently in 5.7 or might be implied; skipping to rely on selector defaults
 	
 	UPCGNode* SpawnerNode = NewGraph->AddNode(SpawnerSettings);
 	if (!SpawnerNode)
@@ -376,20 +410,19 @@ UPCGGraph* ANKBiomeManager::CreatePCGGraphProgrammatically()
 	}
 	BIOME_LOG(TEXT("✅ Static Mesh Spawner Node added"));
 
-	// 4. Connect Input (Landscape) -> Sampler
-	// Note: In UE 5.2+, Input node is implicit or retrieved via FindInputNode
-	UPCGNode* InputNode = NewGraph->GetInputNode();
-	if (InputNode)
-	{
-		// Connect Input "Landscape" pin to Sampler "Surface" pin
-		NewGraph->AddEdge(InputNode, TEXT("Landscape"), SamplerNode, TEXT("Surface"));
-		BIOME_LOG(TEXT("🔗 Connected Input -> Sampler"));
-	}
+	// 5. Connect GetLandscapeData -> Surface Sampler
+	// GetLandscapeData outputs "Out", Surface Sampler expects "Surface" input
+	NewGraph->AddEdge(GetLandscapeNode, TEXT("Out"), SamplerNode, TEXT("Surface"));
+	BIOME_LOG(TEXT("🔗 Connected GetLandscapeData(Out) -> Sampler(Surface)"));
 
-	// 5. Connect Sampler -> Spawner
-	// Connect Sampler "Out" pin to Spawner "In" pin
+	// 6. Connect Sampler -> Spawner
+	// Sampler outputs "Out", Spawner expects "In" input
 	NewGraph->AddEdge(SamplerNode, TEXT("Out"), SpawnerNode, TEXT("In"));
-	BIOME_LOG(TEXT("🔗 Connected Sampler -> Spawner"));
+	BIOME_LOG(TEXT("🔗 Connected Sampler(Out) -> Spawner(In)"));
+	
+	// Note: Output node connection is NOT needed for runtime graphs
+	// The graph will execute all connected nodes automatically
+	BIOME_LOG(TEXT("✅ Graph creation complete - ready for execution"));
 	
 	return NewGraph;
 }
@@ -545,10 +578,57 @@ void ANKBiomeManager::OnPCGGraphGenerated(UPCGComponent* InPCGComponent)
 	if (InPCGComponent)
 	{
 		BIOME_LOG(FString::Printf(TEXT("   Component: %s"), *InPCGComponent->GetName()));
+		
+		// Inspect spawned HISM components on the owner (Landscape)
+		AActor* ComponentOwner = InPCGComponent->GetOwner();
+		if (ComponentOwner)
+		{
+			int32 TotalInstances = 0;
+			int32 HISMCount = 0;
+			
+			TArray<UHierarchicalInstancedStaticMeshComponent*> HISMComponents;
+			ComponentOwner->GetComponents<UHierarchicalInstancedStaticMeshComponent>(HISMComponents);
+			
+			for (auto HISM : HISMComponents)
+			{
+				if (HISM->GetInstanceCount() > 0)
+				{
+					// Log details about this batch
+					BIOME_LOG(FString::Printf(TEXT("   🌿 Found HISM Batch: %s | Mesh: %s | Instances: %d"), 
+						*HISM->GetName(), 
+						HISM->GetStaticMesh() ? *HISM->GetStaticMesh()->GetName() : TEXT("None"),
+						HISM->GetInstanceCount()));
+						
+					TotalInstances += HISM->GetInstanceCount();
+					HISMCount++;
+				}
+			}
+			
+			BIOME_LOG(FString::Printf(TEXT("📊 PCG Generation Report:")));
+			BIOME_LOG(FString::Printf(TEXT("   Total Instances Spawned: %d"), TotalInstances));
+			BIOME_LOG(FString::Printf(TEXT("   HISM Batches: %d"), HISMCount));
+			
+			if (TotalInstances == 0)
+			{
+				BIOME_LOG_ERROR(TEXT("❌ PCG generated 0 instances! The graph logic ran but produced no points."));
+				BIOME_LOG_WARNING(TEXT("   Possible causes:"));
+				BIOME_LOG_WARNING(TEXT("   1. Landscape data empty (Heightmap resolution?)"));
+				BIOME_LOG_WARNING(TEXT("   2. Density too low (PointsPerSquaredMeter)"));
+				BIOME_LOG_WARNING(TEXT("   3. Surface Sampler 'Unbounded' setting"));
+			}
+			else
+			{
+				BIOME_LOG(TEXT("✅ Grass instances should be visible now."));
+			}
+		}
 	}
 	
-	// Check for generated actors
-	CheckPCGActorsInWorld();
+	// Check for generated actors (Partition Actors)
+	// Only relevant if partitioning is enabled
+	if (InPCGComponent->IsPartitioned())
+	{
+		CheckPCGActorsInWorld();
+	}
 	
 	BIOME_LOG(TEXT("✅ ========================================"));
 }
