@@ -9,8 +9,23 @@
 // Forward declarations
 class UPCGComponent;
 class UPCGGraphInterface;
+class UPCGGraph;
 class ALandscape;
 class UNKScannerLogger;
+class UHierarchicalInstancedStaticMeshComponent;
+
+/**
+ * Grass spawning mode
+ */
+UENUM(BlueprintType)
+enum class EGrassSpawnMode : uint8
+{
+	/** Use PCG framework with programmatic graph creation */
+	PCG UMETA(DisplayName = "PCG (Procedural Content Generation)"),
+	
+	/** Direct spawning using Hierarchical Instanced Static Mesh */
+	HISM UMETA(DisplayName = "HISM (Direct Spawning)")
+};
 
 /**
  * Biome Manager Actor
@@ -58,6 +73,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PCG Grass")
 	bool bGenerateOnBeginPlay = true;
 	
+	/**
+	 * Grass spawning mode
+	 * PCG: Uses Procedural Content Generation framework (default)
+	 * HISM: Direct spawning using Hierarchical Instanced Static Mesh
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PCG Grass")
+	EGrassSpawnMode GrassSpawnMode = EGrassSpawnMode::PCG;
+	
+	/**
+	 * Grass density (points per square meter)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PCG Grass", meta = (ClampMin = "0.01", ClampMax = "10.0"))
+	float PointsPerSquareMeter = 0.5f;
+	
+	/**
+	 * Minimum grass scale
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PCG Grass", meta = (ClampMin = "0.1", ClampMax = "5.0"))
+	float MinScale = 0.8f;
+	
+	/**
+	 * Maximum grass scale
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PCG Grass", meta = (ClampMin = "0.1", ClampMax = "5.0"))
+	float MaxScale = 1.2f;	
 	// ===== Public API =====
 	
 	/**
@@ -109,4 +149,25 @@ private:
 	 * Execute console command for runtime grass maps
 	 */
 	void EnableRuntimeGrassMaps();
+	
+	/**
+	 * Check if PCG actors were created in the world
+	 */
+	void CheckPCGActorsInWorld();
+	
+	/**
+	 * Create PCG graph programmatically without preset
+	 */
+	UPCGGraph* CreatePCGGraphProgrammatically();
+	
+	/**
+	 * Spawn grass using HISM (fallback mode)
+	 */
+	void SpawnGrassWithHISM();
+	
+	/**
+	 * HISM component for direct spawning (created if using HISM mode)
+	 */
+	UPROPERTY()
+	UHierarchicalInstancedStaticMeshComponent* HISMComponent;
 };

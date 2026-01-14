@@ -1,0 +1,7 @@
+void ANKBiomeManager::OnPCGGraphGenerated(UPCGComponent* InPCGComponent)
+{
+	BIOME_LOG(TEXT("🎉🎉🎉 PCG GENERATION COMPLETED! 🎉🎉🎉"));
+	BIOME_LOG(FString::Printf(TEXT("     Component: %s"), InPCGComponent ? *InPCGComponent->GetName() : TEXT("NULL")));
+	BIOME_LOG(FString::Printf(TEXT("     Owner: %s"), InPCGComponent && InPCGComponent->GetOwner() ? *InPCGComponent->GetOwner()->GetName() : TEXT("NULL")));
+	BIOME_LOG(TEXT("     ✅ Grass should now be visible in the world!"));
+}
