@@ -170,4 +170,10 @@ private:
 	 */
 	UPROPERTY()
 	UHierarchicalInstancedStaticMeshComponent* HISMComponent;
+	
+	/**
+	 * Callback when PCG generation completes (using External delegate)
+	 */
+	UFUNCTION()
+	void OnPCGGraphGenerated(UPCGComponent* InPCGComponent);
 };

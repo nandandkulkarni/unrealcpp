@@ -10,6 +10,12 @@
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 
+// PCG Includes
+#include "Elements/PCGSurfaceSampler.h"
+#include "Elements/PCGStaticMeshSpawner.h"
+#include "MeshSelectors/PCGMeshSelectorWeighted.h"
+#include "Data/PCGPointData.h"
+
 // Helper macros for logging (uses instance logger)
 #define BIOME_LOG(Message) if (Logger) { Logger->Log(Message, TEXT("BiomeManager")); }
 #define BIOME_LOG_ERROR(Message) if (Logger) { Logger->LogError(Message, TEXT("BiomeManager")); }
@@ -197,6 +203,11 @@ void ANKBiomeManager::SetupPCGComponent()
 	PCGComponent->RegisterComponent();
 	BIOME_LOG(TEXT("✅ PCGComponent registered"));
 	
+	// Bind to generation complete event
+	// Note: In UE 5.7 this is OnPCGGraphGeneratedExternal
+	PCGComponent->OnPCGGraphGeneratedExternal.AddDynamic(this, &ANKBiomeManager::OnPCGGraphGenerated);
+	BIOME_LOG(TEXT("🔗 Bound to OnPCGGraphGeneratedExternal event"));
+	
 	// Activate component (CRITICAL - component must be active to generate)
 	BIOME_LOG(TEXT("⚡ Activating PCGComponent..."));
 	PCGComponent->Activate(true);
@@ -315,7 +326,7 @@ UPCGGraph* ANKBiomeManager::CreatePCGGraphProgrammatically()
 		return nullptr;
 	}
 	
-	// Create a new PCG graph
+	// 1. Create a new PCG graph
 	UPCGGraph* NewGraph = NewObject<UPCGGraph>(this, UPCGGraph::StaticClass(), TEXT("RuntimeGrassGraph"));
 	if (!NewGraph)
 	{
@@ -325,18 +336,62 @@ UPCGGraph* ANKBiomeManager::CreatePCGGraphProgrammatically()
 	
 	BIOME_LOG(TEXT("✅ UPCGGraph created"));
 	
-	// Note: Programmatic node creation in PCG is extremely complex and undocumented
-	// For now, we'll return null to trigger HISM fallback
-	// Future implementation would need to:
-	// 1. Create UPCGSurfaceSamplerSettings node
-	// 2. Create UPCGStaticMeshSpawnerSettings node  
-	// 3. Connect nodes programmatically
-	// 4. Compile the graph
+	// 2. Create Surface Sampler Node
+	// Note: AddNode requires an instantiated Settings object
+	UPCGSurfaceSamplerSettings* SamplerSettings = NewObject<UPCGSurfaceSamplerSettings>(NewGraph);
+	SamplerSettings->PointsPerSquaredMeter = PointsPerSquareMeter;
+	SamplerSettings->PointExtents = FVector(10.0f, 10.0f, 10.0f);
+	SamplerSettings->Looseness = 1.0f;
 	
-	BIOME_LOG_WARNING(TEXT("⚠️ Programmatic PCG node creation not yet implemented - triggering HISM fallback"));
+	UPCGNode* SamplerNode = NewGraph->AddNode(SamplerSettings);
+	if (!SamplerNode)
+	{
+		BIOME_LOG_ERROR(TEXT("❌ Failed to create Sampler Node!"));
+		return nullptr;
+	}
+	BIOME_LOG(TEXT("✅ Surface Sampler Node added"));
 	
-	// Return null to trigger HISM fallback
-	return nullptr;
+	// 3. Create Static Mesh Spawner Node
+	UPCGStaticMeshSpawnerSettings* SpawnerSettings = NewObject<UPCGStaticMeshSpawnerSettings>(NewGraph);
+	
+	// Set Mesh Selector Type (Weighted is the default/standard)
+	SpawnerSettings->SetMeshSelectorType(UPCGMeshSelectorWeighted::StaticClass());
+	
+	// Configure Mesh Selector
+	if (UPCGMeshSelectorWeighted* MeshSelector = Cast<UPCGMeshSelectorWeighted>(SpawnerSettings->MeshSelectorParameters))
+	{
+		FPCGMeshSelectorWeightedEntry Entry;
+		Entry.Descriptor.StaticMesh = GrassMesh;
+		Entry.Weight = 1;
+		
+		MeshSelector->MeshEntries.Add(Entry);
+	}
+	// Note: bApplyMeshConfig behaves differently in 5.7 or might be implied; skipping to rely on selector defaults
+	
+	UPCGNode* SpawnerNode = NewGraph->AddNode(SpawnerSettings);
+	if (!SpawnerNode)
+	{
+		BIOME_LOG_ERROR(TEXT("❌ Failed to create Spawner Node!"));
+		return nullptr;
+	}
+	BIOME_LOG(TEXT("✅ Static Mesh Spawner Node added"));
+
+	// 4. Connect Input (Landscape) -> Sampler
+	// Note: In UE 5.2+, Input node is implicit or retrieved via FindInputNode
+	UPCGNode* InputNode = NewGraph->GetInputNode();
+	if (InputNode)
+	{
+		// Connect Input "Landscape" pin to Sampler "Surface" pin
+		NewGraph->AddEdge(InputNode, TEXT("Landscape"), SamplerNode, TEXT("Surface"));
+		BIOME_LOG(TEXT("🔗 Connected Input -> Sampler"));
+	}
+
+	// 5. Connect Sampler -> Spawner
+	// Connect Sampler "Out" pin to Spawner "In" pin
+	NewGraph->AddEdge(SamplerNode, TEXT("Out"), SpawnerNode, TEXT("In"));
+	BIOME_LOG(TEXT("🔗 Connected Sampler -> Spawner"));
+	
+	return NewGraph;
 }
 
 void ANKBiomeManager::SpawnGrassWithHISM()
@@ -478,5 +533,22 @@ void ANKBiomeManager::SpawnGrassWithHISM()
 	BIOME_LOG(FString::Printf(TEXT("   Total Instances Added: %d"), InstanceTransforms.Num()));
 	BIOME_LOG(FString::Printf(TEXT("   Scale Range: %.2f - %.2f"), MinScale, MaxScale));
 	BIOME_LOG(FString::Printf(TEXT("   Coverage: %.1f%% of target"), (float)InstanceTransforms.Num() / (float)InstanceCount * 100.0f));
+	BIOME_LOG(TEXT("✅ ========================================"));
+}
+
+void ANKBiomeManager::OnPCGGraphGenerated(UPCGComponent* InPCGComponent)
+{
+	BIOME_LOG(TEXT("✅ ========================================"));
+	BIOME_LOG(TEXT("✅ PCG GENERATION EVENT RECEIVED!"));
+	BIOME_LOG(TEXT("   The PCG graph has finished generating content."));
+	
+	if (InPCGComponent)
+	{
+		BIOME_LOG(FString::Printf(TEXT("   Component: %s"), *InPCGComponent->GetName()));
+	}
+	
+	// Check for generated actors
+	CheckPCGActorsInWorld();
+	
 	BIOME_LOG(TEXT("✅ ========================================"));
 }
