@@ -637,6 +637,13 @@ void ANKMappingCamera::OnMappingComplete()
 	UE_LOG(LogTemp, Warning, TEXT("========================================"));
 }
 
+void ANKMappingCamera::OnMappingFailed()
+{
+	UE_LOG(LogTemp, Error, TEXT("ANKMappingCamera: Mapping failed"));
+	
+	TransitionToState(EMappingScannerState::Idle);
+}
+
 void ANKMappingCamera::StartRecordingPlayback()
 {
 	if (!RecordingCameraComponent)
