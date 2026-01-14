@@ -21,7 +21,9 @@ public class TPCPP : ModuleRules
 			"Slate",
 			"CinematicCamera",
 			"Json",
-			"JsonUtilities"
+			"JsonUtilities",
+			"PCG",
+			"Landscape"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
