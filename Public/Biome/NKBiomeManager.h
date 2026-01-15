@@ -13,6 +13,7 @@ class UPCGGraph;
 class ALandscape;
 class UNKScannerLogger;
 class UHierarchicalInstancedStaticMeshComponent;
+class UPCGPointData;
 
 /**
  * Grass spawning mode
@@ -79,7 +80,7 @@ public:
 	 * HISM: Direct spawning using Hierarchical Instanced Static Mesh
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PCG Grass")
-	EGrassSpawnMode GrassSpawnMode = EGrassSpawnMode::PCG;
+	EGrassSpawnMode GrassSpawnMode = EGrassSpawnMode::HISM;
 	
 	/**
 	 * Allow automatic fallback to HISM if PCG fails
@@ -178,6 +179,16 @@ private:
 	UPROPERTY()
 	UHierarchicalInstancedStaticMeshComponent* HISMComponent;
 	
+	// ===== Data Injection =====
+	
+	/**
+	 * Generated point data for hybrid PCG approach
+	 * Populated by Trace logic, consumed by PCG Graph
+	 */
+	// Changed to BlueprintReadWrite to ensure PCG Reflection can access it
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "PCG Grass", meta = (AllowPrivateAccess = "true"))
+	UPCGPointData* GeneratedPointData;
+
 	/**
 	 * Callback when PCG generation completes (using External delegate)
 	 */

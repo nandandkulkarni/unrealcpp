@@ -3,6 +3,8 @@
 #include "Biome/NKBiomeManager.h"
 #include "PCGComponent.h"
 #include "PCGGraph.h"
+#include "PCGVolume.h"
+#include "Components/BrushComponent.h" // Added by user
 #include "Landscape.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
@@ -14,7 +16,8 @@
 #include "Elements/PCGSurfaceSampler.h"
 #include "Elements/PCGStaticMeshSpawner.h"
 #include "MeshSelectors/PCGMeshSelectorWeighted.h"
-#include "Elements/PCGTypedGetter.h"  // For UPCGGetLandscapeSettings
+#include "Elements/PCGTypedGetter.h"
+#include "Elements/PCGDataFromActor.h"  // For UPCGGetLandscapeSettings
 #include "Data/PCGPointData.h"
 
 // Helper macros for logging (uses instance logger)
@@ -64,23 +67,25 @@ void ANKBiomeManager::BeginPlay()
 	
 	// Find or use assigned landscape
 	if (bAutoDetectLandscape)
+	// Find landscape
+	if (bAutoDetectLandscape && !TargetLandscape)
 	{
 		BIOME_LOG(TEXT("🔍 Auto-detecting landscape..."));
 		TargetLandscape = FindLandscapeInLevel();
 	}
-	else
+	else if (!bAutoDetectLandscape && TargetLandscape)
 	{
-		BIOME_LOG(FString::Printf(TEXT("📌 Using manually assigned landscape: %s"), TargetLandscape ? *TargetLandscape->GetName() : TEXT("NULL")));
+		BIOME_LOG(FString::Printf(TEXT("📌 Using manually assigned landscape: %s"), *TargetLandscape->GetName()));
 	}
 	
 	if (!TargetLandscape)
 	{
-		BIOME_LOG_ERROR(TEXT("❌ No landscape found! Cannot generate grass. Aborting."));
-		return;
+		BIOME_LOG_WARNING(TEXT("⚠️ No landscape found! Proceeding with Debug Cube test anyway."));
+		// return; // Allow proceeding for Debug Cube
 	}
 	else
 	{
-		BIOME_LOG(FString::Printf(TEXT("✅ Landscape found: %s"), *TargetLandscape->GetName()));
+		BIOME_LOG(FString::Printf(TEXT("✅ Found Landcape: %s"), *TargetLandscape->GetName()));
 	}
 	
 	BIOME_LOG(FString::Printf(TEXT("🎮 Grass Spawn Mode: %s"), GrassSpawnMode == EGrassSpawnMode::PCG ? TEXT("PCG") : TEXT("HISM")));
@@ -194,82 +199,111 @@ ALandscape* ANKBiomeManager::FindLandscapeInLevel()
 
 void ANKBiomeManager::SetupPCGComponent()
 {
-	if (!TargetLandscape || !GrassPreset)
+	// Allow null landscape for Debug Cube test
+	if (!GrassPreset) //Removed !TargetLandscape check
 	{
+		BIOME_LOG_ERROR(TEXT("❌ No Grass Preset! cannot setup."));
 		return;
 	}
 	
 	// Create PCG component with LANDSCAPE as owner (critical for bounds)
 	// PCGHelpers::GetGridBounds() checks if owner is ALandscapeProxy - if yes, uses GetLandscapeBounds()
-	// If owner is BiomeManager (no bounds), GetActorBounds() returns invalid bounds
-	BIOME_LOG(TEXT("🔧 Creating PCGComponent with Landscape as owner..."));
-	PCGComponent = NewObject<UPCGComponent>(TargetLandscape, UPCGComponent::StaticClass(), TEXT("RuntimeGrassPCG"));
-	if (!PCGComponent)
+	FBox TraceBounds;
+	
+	// Prioritize User's "MyCube"
+	AActor* TargetActor = nullptr;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{
-		BIOME_LOG_ERROR(TEXT("❌ Failed to create PCGComponent with NewObject!"));
-		return;
-	}
-	BIOME_LOG(TEXT("✅ PCGComponent created successfully"));
-	BIOME_LOG(FString::Printf(TEXT("   Owner: %s"), *PCGComponent->GetOwner()->GetName()));
-	
-	// Configure PCG component settings BEFORE registration
-	
-	// Set the grass preset graph
-	BIOME_LOG(FString::Printf(TEXT("🎨 Setting graph to: %s"), *GrassPreset->GetName()));
-	PCGComponent->SetGraph(GrassPreset);
-	
-	// Configure for runtime generation
-	// NOTE: Using GenerateOnLoad ensures it generates when registered/loaded
-	BIOME_LOG(TEXT("⚙️ Configuring: GenerationTrigger=GenerateOnLoad"));
-	PCGComponent->GenerationTrigger = EPCGComponentGenerationTrigger::GenerateOnLoad;
-	
-	// Debug: Disable partitioning to force immediate generation of entire landscape
-	// This helps rule out issues with PCGWorldActor/GenerationSources
-	BIOME_LOG(TEXT("🧪 Debug: Disabling partitioning to force global generation..."));
-	PCGComponent->SetIsPartitioned(false);
-	BIOME_LOG(TEXT("⚠️ Partitioning disabled (Debug Mode)"));
-	
-	// Bind to generation complete event
-	PCGComponent->OnPCGGraphGeneratedExternal.AddDynamic(this, &ANKBiomeManager::OnPCGGraphGenerated);
-	BIOME_LOG(TEXT("🔗 Bound to OnPCGGraphGeneratedExternal event"));
-	
-	// Activate component
-	BIOME_LOG(TEXT("⚡ Activating PCGComponent..."));
-	PCGComponent->Activate(true);
-	
-	// Register component (LAST step to ensure all settings are applied)
-	BIOME_LOG(TEXT("📝 Registering PCGComponent..."));
-	PCGComponent->RegisterComponent();
-	BIOME_LOG(TEXT("✅ PCGComponent registered"));
-	
-	// Get landscape bounds for logging
-	FBox LandscapeBounds = TargetLandscape->GetComponentsBoundingBox(true);
-	
-	BIOME_LOG(TEXT("✅ PCG Component fully configured:"));
-	UE_LOG(LogTemp, Log, TEXT("     📐 Landscape Bounds: (%.1f, %.1f, %.1f) to (%.1f, %.1f, %.1f) meters"),
-		LandscapeBounds.Min.X/100.0f, LandscapeBounds.Min.Y/100.0f, LandscapeBounds.Min.Z/100.0f,
-		LandscapeBounds.Max.X/100.0f, LandscapeBounds.Max.Y/100.0f, LandscapeBounds.Max.Z/100.0f);
-	UE_LOG(LogTemp, Log, TEXT("     🎨 Graph: %s"), *GrassPreset->GetName());
-	UE_LOG(LogTemp, Log, TEXT("     ✅ Ready for generation"));
-	
-	// Debug: Inspect PCG Component Properties
-	BIOME_LOG(TEXT("🔍 PCG Component Property Inspection:"));
-	BIOME_LOG(FString::Printf(TEXT("     Owner: %s"), PCGComponent->GetOwner() ? *PCGComponent->GetOwner()->GetName() : TEXT("NULL")));
-	BIOME_LOG(FString::Printf(TEXT("     Graph: %s"), PCGComponent->GetGraph() ? *PCGComponent->GetGraph()->GetName() : TEXT("NULL")));
-	BIOME_LOG(FString::Printf(TEXT("     IsPartitioned: %s"), PCGComponent->IsPartitioned() ? TEXT("TRUE") : TEXT("FALSE")));
-	BIOME_LOG(FString::Printf(TEXT("     GenerationTrigger: %d"), (int32)PCGComponent->GenerationTrigger));
-	BIOME_LOG(FString::Printf(TEXT("     IsRegistered: %s"), PCGComponent->IsRegistered() ? TEXT("TRUE") : TEXT("FALSE")));
-	BIOME_LOG(FString::Printf(TEXT("     IsActive: %s"), PCGComponent->IsActive() ? TEXT("TRUE") : TEXT("FALSE")));
-	BIOME_LOG(FString::Printf(TEXT("     World: %s"), PCGComponent->GetWorld() ? *PCGComponent->GetWorld()->GetName() : TEXT("NULL")));
-	
-	// Check if graph has nodes
-	if (PCGComponent->GetGraph())
-	{
-		UPCGGraph* Graph = Cast<UPCGGraph>(PCGComponent->GetGraph());
-		if (Graph)
+		if (It->GetName().Contains(TEXT("MyCube")) || (It->GetActorLabel().Contains(TEXT("MyCube"))))
 		{
-			BIOME_LOG(FString::Printf(TEXT("     Graph Nodes: %d"), Graph->GetNodes().Num()));
+			TargetActor = *It;
+			break;
 		}
+	}
+	
+	if (TargetActor)
+	{
+		TraceBounds = TargetActor->GetComponentsBoundingBox(true);
+		BIOME_LOG(FString::Printf(TEXT("🎯 Found Target Actor: %s"), *TargetActor->GetName()));
+	}
+	else if (TargetLandscape)
+	{
+		TraceBounds = TargetLandscape->GetComponentsBoundingBox(true);
+	}
+	else
+	{
+		// Fallback: Spawn Debug Floor
+
+	
+	}
+	
+	if (TraceBounds.IsValid)
+	{
+		// Reuse HISM Logic logic to calculate points
+		FBox Bounds = TraceBounds;
+		
+		int32 Count = 100; // Fixed count for test
+		
+		// Create Point Data with valid Metadata
+		GeneratedPointData = NewObject<UPCGPointData>(this);
+		GeneratedPointData->Metadata = NewObject<UPCGMetadata>(GeneratedPointData);
+		GeneratedPointData->Metadata->Initialize(nullptr);
+		
+		TArray<FPCGPoint>& PcgPoints = GeneratedPointData->GetMutablePoints();
+		
+		// Use Target Bounds for generation (MyCube or Landscape)
+		BIOME_LOG(FString::Printf(TEXT("📐 Generating %d points on Target: %s"), Count, *Bounds.ToString()));
+		
+		PcgPoints.Reserve(Count);
+		
+		for (int32 i = 0; i < Count; i++)
+		{
+			// Generate random point within Target Bounds XY
+			float RX = FMath::RandRange(Bounds.Min.X, Bounds.Max.X);
+			float RY = FMath::RandRange(Bounds.Min.Y, Bounds.Max.Y);
+			
+			FHitResult Hit;
+			// Trace from Top of bounds down to Bottom of bounds
+			if (GetWorld()->LineTraceSingleByChannel(Hit, FVector(RX, RY, Bounds.Max.Z + 100), FVector(RX, RY, Bounds.Min.Z - 100), ECC_WorldStatic))
+			{
+				FPCGPoint P;
+				P.Transform.SetLocation(Hit.Location);
+				
+				// Random Rotation/Scale
+				float Scale = FMath::RandRange(MinScale, MaxScale);
+				float Yaw = FMath::RandRange(0.0f, 360.0f);
+				
+				P.Transform.SetRotation(FQuat(FRotator(0, Yaw, 0)));
+				P.Transform.SetScale3D(FVector(Scale));
+				P.Density = 1.0f;
+				P.Seed = i;
+				
+				// CRITICAL: Set usage bounds/extents for culling
+				P.BoundsMin = FVector(-100.0f);
+				P.BoundsMax = FVector(100.0f);
+				
+				PcgPoints.Add(P);
+			}
+		}
+		BIOME_LOG(FString::Printf(TEXT("✅ Generated %d points from traces"), PcgPoints.Num()));
+	}
+	
+	// Create PCG Component (Local owner)
+	BIOME_LOG(TEXT("🔧 Creating PCGComponent on BiomeManager..."));
+	PCGComponent = NewObject<UPCGComponent>(this, UPCGComponent::StaticClass(), TEXT("RuntimeGrassPCG"));
+	if (PCGComponent)
+	{
+		PCGComponent->RegisterComponent(); // Single registration
+		
+		PCGComponent->SetGraph(GrassPreset);
+		PCGComponent->SetIsPartitioned(false); // Global mode for now
+		PCGComponent->GenerationTrigger = EPCGComponentGenerationTrigger::GenerateOnLoad;
+		
+		PCGComponent->OnPCGGraphGeneratedExternal.AddDynamic(this, &ANKBiomeManager::OnPCGGraphGenerated);
+		PCGComponent->Activate(true);
+		
+		BIOME_LOG(TEXT("🚀 Triggering Generation..."));
+		PCGComponent->Generate();
 	}
 }
 
@@ -344,85 +378,44 @@ UPCGGraph* ANKBiomeManager::CreatePCGGraphProgrammatically()
 	
 	// 1. Create a new PCG graph
 	UPCGGraph* NewGraph = NewObject<UPCGGraph>(this, UPCGGraph::StaticClass(), TEXT("RuntimeGrassGraph"));
-	if (!NewGraph)
-	{
-		BIOME_LOG_ERROR(TEXT("❌ Failed to create UPCGGraph object!"));
-		return nullptr;
-	}
+	// ... (Check NewGraph) ...
 	
 	BIOME_LOG(TEXT("✅ UPCGGraph created"));
 	
-	// 2. Create Get Landscape Data Node (the correct node for landscape data)
-	// This is the C++ equivalent of the "Get Landscape Data" visual node
-	UPCGGetLandscapeSettings* GetLandscapeSettings = NewObject<UPCGGetLandscapeSettings>(NewGraph);
+	// 2. Create Input Node (Read Points from Property)
+	UPCGDataFromActorSettings* InputSettings = NewObject<UPCGDataFromActorSettings>(NewGraph);
+	InputSettings->ActorSelector.ActorFilter = EPCGActorFilter::Self;
+	InputSettings->ActorSelector.ActorSelection = EPCGActorSelection::ByClass; // Select by Class
+	InputSettings->ActorSelector.ActorSelectionClass = ANKBiomeManager::StaticClass(); // Explicitly select this class
+	// InputSettings->ActorSelector.bSelectMultiple = false; // Default
 	
-	// Configure to look at "Self" (the Landscape actor owning this component)
-	// This avoids expensive world searches and ensures we get the right landscape
-	GetLandscapeSettings->ActorSelector.ActorFilter = EPCGActorFilter::Self;
-	GetLandscapeSettings->ActorSelector.ActorSelection = EPCGActorSelection::ByClass;
-	GetLandscapeSettings->ActorSelector.ActorSelectionClass = ALandscapeProxy::StaticClass();
+	InputSettings->Mode = EPCGGetDataFromActorMode::GetDataFromProperty;
+	InputSettings->PropertyName = FName("GeneratedPointData");
 	
-	UPCGNode* GetLandscapeNode = NewGraph->AddNode(GetLandscapeSettings);
-	if (!GetLandscapeNode)
-	{
-		BIOME_LOG_ERROR(TEXT("❌ Failed to create GetLandscapeData Node!"));
-		return nullptr;
-	}
-	BIOME_LOG(TEXT("✅ GetLandscapeData Node added"));
+	// Explicitly map "GeneratedPointData" to output pin
+	// Note: Property extraction typically outputs to "Out"
 	
-	// 3. Create Surface Sampler Node
-	// Note: AddNode requires an instantiated Settings object
-	UPCGSurfaceSamplerSettings* SamplerSettings = NewObject<UPCGSurfaceSamplerSettings>(NewGraph);
-	SamplerSettings->PointsPerSquaredMeter = PointsPerSquareMeter;
-	SamplerSettings->PointExtents = FVector(10.0f, 10.0f, 10.0f);
-	SamplerSettings->Looseness = 1.0f;
-	SamplerSettings->bUnbounded = true; // CRITICAL: Generate over entire landscape, not just actor bounds
+	UPCGNode* InputNode = NewGraph->AddNode(InputSettings);
+	BIOME_LOG(TEXT("✅ GetActorData Node added (Property: GeneratedPointData)"));
 	
-	UPCGNode* SamplerNode = NewGraph->AddNode(SamplerSettings);
-	if (!SamplerNode)
-	{
-		BIOME_LOG_ERROR(TEXT("❌ Failed to create Sampler Node!"));
-		return nullptr;
-	}
-	BIOME_LOG(TEXT("✅ Surface Sampler Node added"));
-	
-	// 4. Create Static Mesh Spawner Node
+	// 3. Create Static Mesh Spawner Node
 	UPCGStaticMeshSpawnerSettings* SpawnerSettings = NewObject<UPCGStaticMeshSpawnerSettings>(NewGraph);
-	
-	// Set Mesh Selector Type (Weighted is the default/standard)
 	SpawnerSettings->SetMeshSelectorType(UPCGMeshSelectorWeighted::StaticClass());
 	
-	// Configure Mesh Selector
 	if (UPCGMeshSelectorWeighted* MeshSelector = Cast<UPCGMeshSelectorWeighted>(SpawnerSettings->MeshSelectorParameters))
 	{
 		FPCGMeshSelectorWeightedEntry Entry;
 		Entry.Descriptor.StaticMesh = GrassMesh;
 		Entry.Weight = 1;
-		
 		MeshSelector->MeshEntries.Add(Entry);
 	}
 	
 	UPCGNode* SpawnerNode = NewGraph->AddNode(SpawnerSettings);
-	if (!SpawnerNode)
-	{
-		BIOME_LOG_ERROR(TEXT("❌ Failed to create Spawner Node!"));
-		return nullptr;
-	}
 	BIOME_LOG(TEXT("✅ Static Mesh Spawner Node added"));
-
-	// 5. Connect GetLandscapeData -> Surface Sampler
-	// GetLandscapeData outputs "Out", Surface Sampler expects "Surface" input
-	NewGraph->AddEdge(GetLandscapeNode, TEXT("Out"), SamplerNode, TEXT("Surface"));
-	BIOME_LOG(TEXT("🔗 Connected GetLandscapeData(Out) -> Sampler(Surface)"));
-
-	// 6. Connect Sampler -> Spawner
-	// Sampler outputs "Out", Spawner expects "In" input
-	NewGraph->AddEdge(SamplerNode, TEXT("Out"), SpawnerNode, TEXT("In"));
-	BIOME_LOG(TEXT("🔗 Connected Sampler(Out) -> Spawner(In)"));
 	
-	// Note: Output node connection is NOT needed for runtime graphs
-	// The graph will execute all connected nodes automatically
-	BIOME_LOG(TEXT("✅ Graph creation complete - ready for execution"));
+	// 4. Connect Input -> Spawner
+	NewGraph->AddEdge(InputNode, TEXT("Out"), SpawnerNode, TEXT("In"));
+	BIOME_LOG(TEXT("🔗 Connected Input(Out) -> Spawner(In)"));
 	
 	return NewGraph;
 }
@@ -442,12 +435,17 @@ void ANKBiomeManager::SpawnGrassWithHISM()
 	}
 	BIOME_LOG(FString::Printf(TEXT("✅ Grass mesh validated: %s"), *GrassMesh->GetName()));
 	
-	if (!TargetLandscape)
+	BIOME_LOG(FString::Printf(TEXT("✅ Grass mesh validated: %s"), *GrassMesh->GetName()));
+	
+	// Legacy check removed to allow "MyCube" targeting without a landscape
+	if (TargetLandscape)
 	{
-		BIOME_LOG_ERROR(TEXT("❌ CRITICAL: No target landscape! Cannot spawn grass."));
-		return;
+		BIOME_LOG(FString::Printf(TEXT("✅ Found Landscape: %s"), *TargetLandscape->GetName()));
 	}
-	BIOME_LOG(FString::Printf(TEXT("✅ Target landscape validated: %s"), *TargetLandscape->GetName()));
+	else
+	{
+		BIOME_LOG(TEXT("⚠️ No Landscape found. Accessing fallback targeting (MyCube)..."));
+	}
 	
 	// Create HISM component with detailed logging
 	BIOME_LOG(TEXT("🔧 Creating HISM component..."));
@@ -457,116 +455,71 @@ void ANKBiomeManager::SpawnGrassWithHISM()
 		BIOME_LOG_ERROR(TEXT("❌ CRITICAL: Failed to create HISM component with NewObject!"));
 		return;
 	}
-	BIOME_LOG(TEXT("✅ HISM component object created"));
 	
-	// Configure HISM component
-	BIOME_LOG(TEXT("⚙️ Configuring HISM component..."));
+	// Configure HISM
 	HISMComponent->SetStaticMesh(GrassMesh);
-	BIOME_LOG(FString::Printf(TEXT("   ✓ Static mesh set: %s"), *GrassMesh->GetName()));
-	
-	HISMComponent->SetMobility(EComponentMobility::Stationary);
-	BIOME_LOG(TEXT("   ✓ Mobility: Stationary"));
-	
-	HISMComponent->SetCastShadow(false);
-	BIOME_LOG(TEXT("   ✓ Cast shadow: Disabled (performance)"));
-	
 	HISMComponent->RegisterComponent();
-	BIOME_LOG(TEXT("   ✓ Component registered"));
-	
 	HISMComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-	BIOME_LOG(TEXT("   ✓ Component attached to root"));
 	
-	BIOME_LOG(TEXT("✅ HISM component fully configured"));
+	// --- GENERATE DATA (Trace) using MyCube Logic ---
+	FBox TraceBounds;
 	
-	// Get landscape bounds with detailed logging
-	BIOME_LOG(TEXT("📐 Calculating landscape bounds..."));
-	FBox LandscapeBounds = TargetLandscape->GetComponentsBoundingBox(true);
-	FVector LandscapeMin = LandscapeBounds.Min;
-	FVector LandscapeMax = LandscapeBounds.Max;
-	
-	BIOME_LOG(FString::Printf(TEXT("   Min: (%.1f, %.1f, %.1f)"), LandscapeMin.X, LandscapeMin.Y, LandscapeMin.Z));
-	BIOME_LOG(FString::Printf(TEXT("   Max: (%.1f, %.1f, %.1f)"), LandscapeMax.X, LandscapeMax.Y, LandscapeMax.Z));
-	
-	// Calculate area and number of instances
-	float LandscapeWidth = (LandscapeMax.X - LandscapeMin.X) / 100.0f;  // Convert to meters
-	float LandscapeHeight = (LandscapeMax.Y - LandscapeMin.Y) / 100.0f;
-	float AreaSquareMeters = LandscapeWidth * LandscapeHeight;
-	int32 InstanceCount = FMath::FloorToInt(AreaSquareMeters * PointsPerSquareMeter);
-	
-	BIOME_LOG(FString::Printf(TEXT("📊 Landscape Statistics:")));
-	BIOME_LOG(FString::Printf(TEXT("   Width: %.1f meters"), LandscapeWidth));
-	BIOME_LOG(FString::Printf(TEXT("   Height: %.1f meters"), LandscapeHeight));
-	BIOME_LOG(FString::Printf(TEXT("   Total Area: %.1f sq meters"), AreaSquareMeters));
-	BIOME_LOG(FString::Printf(TEXT("   Density: %.2f points/sq meter"), PointsPerSquareMeter));
-	BIOME_LOG(FString::Printf(TEXT("   Target Instances: %d"), InstanceCount));
-	
-	// Spawn instances with progress tracking
-	BIOME_LOG(TEXT("🌱 Starting instance generation..."));
-	TArray<FTransform> InstanceTransforms;
-	InstanceTransforms.Reserve(InstanceCount);
-	
-	UWorld* World = GetWorld();
-	int32 SuccessfulTraces = 0;
-	int32 FailedTraces = 0;
-	
-	// Log every 10% progress
-	int32 ProgressInterval = FMath::Max(1, InstanceCount / 10);
-	
-	for (int32 i = 0; i < InstanceCount; i++)
+	// Prioritize "MyCube"
+	AActor* TargetActor = nullptr;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{
-		// Progress logging
-		if (i % ProgressInterval == 0 && i > 0)
+		if (It->GetName().Contains(TEXT("MyCube")) || (It->GetActorLabel().Contains(TEXT("MyCube"))))
 		{
-			float Progress = (float)i / (float)InstanceCount * 100.0f;
-			BIOME_LOG(FString::Printf(TEXT("   Progress: %.0f%% (%d/%d instances)"), Progress, i, InstanceCount));
-		}
-		
-		// Random position on landscape
-		float RandomX = FMath::RandRange(LandscapeMin.X, LandscapeMax.X);
-		float RandomY = FMath::RandRange(LandscapeMin.Y, LandscapeMax.Y);
-		
-		// Line trace to get terrain height and normal
-		FVector TraceStart(RandomX, RandomY, LandscapeMax.Z + 1000.0f);
-		FVector TraceEnd(RandomX, RandomY, LandscapeMin.Z - 1000.0f);
-		
-		FHitResult HitResult;
-		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_WorldStatic))
-		{
-			SuccessfulTraces++;
-			
-			// Random scale
-			float RandomScale = FMath::RandRange(MinScale, MaxScale);
-			
-			// Random rotation around Z axis
-			float RandomYaw = FMath::RandRange(0.0f, 360.0f);
-			
-			FTransform InstanceTransform;
-			InstanceTransform.SetLocation(HitResult.Location);
-			InstanceTransform.SetRotation(FQuat(FRotator(0.0f, RandomYaw, 0.0f)));
-			InstanceTransform.SetScale3D(FVector(RandomScale));
-			
-			InstanceTransforms.Add(InstanceTransform);
-		}
-		else
-		{
-			FailedTraces++;
+			TargetActor = *It;
+			break;
 		}
 	}
 	
-	BIOME_LOG(TEXT("📊 Line Trace Results:"));
-	BIOME_LOG(FString::Printf(TEXT("   ✅ Successful: %d (%.1f%%)"), SuccessfulTraces, (float)SuccessfulTraces / (float)InstanceCount * 100.0f));
-	BIOME_LOG(FString::Printf(TEXT("   ❌ Failed: %d (%.1f%%)"), FailedTraces, (float)FailedTraces / (float)InstanceCount * 100.0f));
+	if (TargetActor)
+	{
+		TraceBounds = TargetActor->GetComponentsBoundingBox(true);
+		BIOME_LOG(FString::Printf(TEXT("🎯 HISM Targeting Actor: %s"), *TargetActor->GetName()));
+	}
+	else if (TargetLandscape)
+	{
+		TraceBounds = TargetLandscape->GetComponentsBoundingBox(true);
+		BIOME_LOG(TEXT("🎯 HISM Targeting Landscape"));
+	}
+	else
+	{
+		BIOME_LOG(TEXT("❌ No Target Found for HISM."));
+		return;
+	}
 	
-	// Add all instances at once
-	BIOME_LOG(TEXT("🔨 Adding instances to HISM component..."));
-	HISMComponent->AddInstances(InstanceTransforms, false);
+	if (!TraceBounds.IsValid) return;
+
+	int32 Count = 100; // Fixed 100 points
+	BIOME_LOG(FString::Printf(TEXT("🌱 Generating 100 HISM Instances on Target...")));
 	
-	BIOME_LOG(TEXT("✅ ========================================"));
-	BIOME_LOG(FString::Printf(TEXT("✅ HISM SPAWNING COMPLETE!")));
-	BIOME_LOG(FString::Printf(TEXT("   Total Instances Added: %d"), InstanceTransforms.Num()));
-	BIOME_LOG(FString::Printf(TEXT("   Scale Range: %.2f - %.2f"), MinScale, MaxScale));
-	BIOME_LOG(FString::Printf(TEXT("   Coverage: %.1f%% of target"), (float)InstanceTransforms.Num() / (float)InstanceCount * 100.0f));
-	BIOME_LOG(TEXT("✅ ========================================"));
+	for (int32 i = 0; i < Count; i++)
+	{
+		float RX = FMath::RandRange(TraceBounds.Min.X, TraceBounds.Max.X);
+		float RY = FMath::RandRange(TraceBounds.Min.Y, TraceBounds.Max.Y);
+		
+		FHitResult Hit;
+		if (GetWorld()->LineTraceSingleByChannel(Hit, FVector(RX, RY, TraceBounds.Max.Z + 100), FVector(RX, RY, TraceBounds.Min.Z - 100), ECC_WorldStatic))
+		{
+			FTransform InstanceTransform;
+			InstanceTransform.SetLocation(Hit.Location);
+			
+			// Random Rotation/Scale
+			float Scale = FMath::RandRange(MinScale, MaxScale);
+			float Yaw = FMath::RandRange(0.0f, 360.0f);
+			
+			InstanceTransform.SetRotation(FQuat(FRotator(0, Yaw, 0)));
+			InstanceTransform.SetScale3D(FVector(Scale));
+			
+			HISMComponent->AddInstance(InstanceTransform);
+		}
+	}
+	
+	BIOME_LOG(FString::Printf(TEXT("✅ HISM Spawned %d Instances"), HISMComponent->GetInstanceCount()));
+	
 }
 
 void ANKBiomeManager::OnPCGGraphGenerated(UPCGComponent* InPCGComponent)
